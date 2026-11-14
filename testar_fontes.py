@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
+URL = "https://culturaja.pt/o-que-fazer/gratis"
 
 CABECALHOS = {
     "User-Agent": "Mozilla/5.0 PortoABorra/1.0"
@@ -21,73 +22,56 @@ def obter_pagina(url):
     return BeautifulSoup(resposta.text, "html.parser")
 
 
-def analisar_eventos(nome_fonte, url, seletor, limite=3):
-    print("\n" + "=" * 60)
-    print(nome_fonte)
+def analisar():
+    print("=" * 60)
+    print("CULTURAJÁ - EVENTOS GRATUITOS")
 
-    sopa = obter_pagina(url)
-    cartoes = sopa.select(seletor)
+    sopa = obter_pagina(URL)
+
+    cartoes = sopa.select("article.cartao")
 
     print("Cartões encontrados:", len(cartoes))
 
-    links_eventos = []
-
-    for cartao in cartoes:
+    for numero, cartao in enumerate(cartoes[:10], start=1):
         link = cartao.find("a", href=True)
 
-        if link:
-            endereco = urljoin(url, link["href"])
+        if not link:
+            continue
 
-            if endereco not in links_eventos:
-                links_eventos.append(endereco)
+        titulo = link.get_text(" ", strip=True)
+        url_evento = urljoin(URL, link["href"])
 
-    for numero, endereco in enumerate(links_eventos[:limite], start=1):
-        print("\n" + "-" * 60)
-        print("EVENTO", numero)
-        print("URL:", endereco)
+        concelho = cartao.select_one(".concelho")
+        categoria = cartao.select_one(".categoria")
+
+        print("\n" + "-" * 50)
+        print("EVENTO:", numero)
+        print("TÍTULO:", titulo)
+        print("CONCELHO:", concelho.get_text(strip=True) if concelho else "Não identificado")
+        print("CATEGORIA:", categoria.get_text(strip=True) if categoria else "Não identificada")
+        print("URL:", url_evento)
 
         try:
-            pagina = obter_pagina(endereco)
+            pagina_evento = obter_pagina(url_evento)
+            texto = pagina_evento.get_text(" ", strip=True)
 
-            titulo = (
-                pagina.title.get_text(strip=True)
-                if pagina.title else "Não identificado"
-            )
+            if "Preço" in texto:
+                parte_preco = texto.split("Preço", 1)[1][:180]
+                print("INFORMAÇÃO DE PREÇO:", parte_preco)
+            else:
+                print("INFORMAÇÃO DE PREÇO: Não encontrada")
 
-            print("TÍTULO DA PÁGINA:", titulo)
+            fontes = [
+                a.get("href")
+                for a in pagina_evento.find_all("a", href=True)
+                if "fonte oficial" in a.get_text(" ", strip=True).lower()
+            ]
 
-            texto = pagina.get_text(" ", strip=True)
-
-            print("\nTEXTO DA PÁGINA:")
-            print(texto[:4500])
-
-            print("\nLIGAÇÕES ENCONTRADAS:")
-
-            for link in pagina.find_all("a", href=True):
-                texto_link = link.get_text(" ", strip=True)
-                url_link = urljoin(endereco, link["href"])
-
-                if texto_link:
-                    print("-", texto_link[:100], "|", url_link)
+            print("FONTE OFICIAL:", fontes[0] if fontes else "Não identificada")
 
         except Exception as erro:
-            print("Erro ao analisar o evento:", erro)
+            print("Erro ao consultar evento:", erro)
 
 
 if __name__ == "__main__":
-
-    analisar_eventos(
-        "CULTURAJÁ",
-        "https://culturaja.pt/agenda/",
-        "article.cartao",
-        limite=3
-    )
-
-    analisar_eventos(
-        "AGENDA PORTO",
-        "https://www.agenda-porto.pt/",
-        "div[data-bl-name='Card. Card Event']",
-        limite=3
-    )
-
-    print("\nAnálise das páginas individuais concluída.")
+    analisar()
