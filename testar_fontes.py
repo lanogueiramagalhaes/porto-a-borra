@@ -1,58 +1,99 @@
 
 import requests
 from bs4 import BeautifulSoup
-from fontes import listar_fontes
 
 
-def inspecionar_fonte(fonte):
-    print("\n" + "=" * 60)
-    print("FONTE:", fonte["nome"])
-
+def obter_pagina(url):
     resposta = requests.get(
-        fonte["url"],
+        url,
         headers={"User-Agent": "Mozilla/5.0 PortoABorra/1.0"},
         timeout=20
     )
-
     resposta.raise_for_status()
     resposta.encoding = resposta.apparent_encoding
 
-    sopa = BeautifulSoup(resposta.text, "html.parser")
+    return BeautifulSoup(resposta.text, "html.parser")
 
-    titulos = sopa.find_all(["h2", "h3", "h4"])
 
-    print("\nESTRUTURA DOS EVENTOS:")
+def testar_culturaja():
+    print("\n" + "=" * 60)
+    print("CULTURAJÁ - ANÁLISE DOS CARTÕES")
+
+    sopa = obter_pagina("https://culturaja.pt/agenda/")
+
+    cartoes = sopa.select("article.cartao")
+
+    print("Cartões encontrados:", len(cartoes))
+
+    for numero, cartao in enumerate(cartoes[:2], start=1):
+        print(f"\n--- CARTÃO {numero} ---")
+
+        print("TEXTO COMPLETO:")
+        print(cartao.get_text(" ", strip=True))
+
+        print("\nATRIBUTOS DOS ELEMENTOS:")
+        for elemento in cartao.find_all(["a", "button", "span"]):
+            if elemento.name == "button":
+                print("BUTTON:", elemento.attrs)
+
+            elif elemento.name == "a":
+                print("LINK:", elemento.get_text(" ", strip=True))
+                print("URL:", elemento.get("href"))
+
+            elif elemento.get("class"):
+                print(
+                    "SPAN:",
+                    elemento.get("class"),
+                    elemento.get_text(" ", strip=True)
+                )
+
+        print("\nHTML COMPLETO DO CARTÃO:")
+        print(cartao.prettify()[:7000])
+
+
+def testar_agenda_porto():
+    print("\n" + "=" * 60)
+    print("AGENDA PORTO - ANÁLISE DOS LINKS")
+
+    sopa = obter_pagina("https://www.agenda-porto.pt/")
+
+    links = sopa.find_all("a", href=True)
 
     encontrados = 0
 
-    for titulo in titulos:
-        nome = titulo.get_text(" ", strip=True)
+    for link in links:
+        url = link.get("href", "")
 
-        if not nome or len(nome) < 4:
-            continue
+        if any(
+            palavra in url.lower()
+            for palavra in ["evento", "ciclo", "atividade"]
+        ):
+            print("\nTÍTULO:", link.get_text(" ", strip=True))
+            print("URL:", url)
 
-        elemento = titulo
+            pai = link.parent
 
-        # Sobe na estrutura HTML para encontrar o cartão
-        for _ in range(3):
-            if elemento.parent:
-                elemento = elemento.parent
+            if pai:
+                print("HTML DO ELEMENTO:")
+                print(pai.prettify()[:2500])
 
-        print("\nTÍTULO:", nome)
-        print("HTML DO CARTÃO:")
-        print(elemento.prettify()[:1800])
+            encontrados += 1
 
-        encontrados += 1
+            if encontrados >= 5:
+                break
 
-        if encontrados >= 5:
-            break
-
-    print("\nTotal de cartões inspecionados:", encontrados)
+    print("\nLinks de eventos analisados:", encontrados)
 
 
 if __name__ == "__main__":
-    for fonte in listar_fontes():
-        try:
-            inspecionar_fonte(fonte)
-        except Exception as erro:
-            print("Erro:", erro)
+    try:
+        testar_culturaja()
+    except Exception as erro:
+        print("Erro no CulturaJá:", erro)
+
+    try:
+        testar_agenda_porto()
+    except Exception as erro:
+        print("Erro na Agenda Porto:", erro)
+
+    print("\nAnálise concluída.")
