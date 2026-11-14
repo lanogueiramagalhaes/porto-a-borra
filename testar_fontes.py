@@ -1,6 +1,7 @@
 
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 URL_AGENDA = "https://culturaja.pt/o-que-fazer/gratis"
 
@@ -19,39 +20,115 @@ sessao.headers.update({
     "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8"
 })
 
-print("A consultar a agenda...")
-agenda = sessao.get(URL_AGENDA, timeout=20)
-agenda.raise_for_status()
 
-print("A consultar o evento...")
-evento = sessao.get(
-    URL_EVENTO,
-    headers={"Referer": URL_AGENDA},
-    timeout=20
-)
-evento.raise_for_status()
-evento.encoding = evento.apparent_encoding
+def obter_pagina(url, referer=None):
+    cabecalhos = {}
 
-sopa = BeautifulSoup(evento.text, "html.parser")
+    if referer:
+        cabecalhos["Referer"] = referer
 
-for campo in ["Quando", "Onde", "Preço"]:
-    print("\n" + "=" * 60)
-    print("CAMPO:", campo)
-
-    elementos = sopa.find_all(
-        string=lambda texto: texto and texto.strip() == campo
+    resposta = sessao.get(
+        url,
+        headers=cabecalhos,
+        timeout=20
     )
 
-    if not elementos:
-        print("Campo não encontrado")
-        continue
+    resposta.raise_for_status()
+    resposta.encoding = resposta.apparent_encoding
 
-    for elemento in elementos[:2]:
-        print("\nESTRUTURA HTML:")
+    return BeautifulSoup(resposta.text, "html.parser")
 
-        pai = elemento.parent
 
-        if pai.parent:
-            print(pai.parent.prettify()[:3000])
+def obter_campo(sopa, nome):
+    for dt in sopa.find_all("dt"):
+        if dt.get_text(" ", strip=True) == nome:
+            return dt.find_next_sibling("dd")
+
+    return None
+
+
+def extrair_evento(url):
+    sopa = obter_pagina(url, URL_AGENDA)
+
+    campo_quando = obter_campo(sopa, "Quando")
+    campo_onde = obter_campo(sopa, "Onde")
+    campo_preco = obter_campo(sopa, "Preço")
+
+    # Datas e horários
+    quando = ""
+    horario = ""
+
+    if campo_quando:
+        quando = campo_quando.get_text(" ", strip=True)
+
+        elemento_horario = campo_quando.find("span")
+
+        if elemento_horario:
+            horario = elemento_horario.get_text(" ", strip=True)
+
+    # Local e município
+    local = ""
+    municipio = ""
+
+    if campo_onde:
+        elemento_local = campo_onde.find("a")
+        elemento_municipio = campo_onde.find("span")
+
+        if elemento_local:
+            local = elemento_local.get_text(" ", strip=True)
         else:
-            print(pai.prettify()[:3000])
+            local = campo_onde.get_text(" ", strip=True)
+
+        if elemento_municipio:
+            municipio = elemento_municipio.get_text(" ", strip=True)
+
+    # Preço e respetiva descrição
+    preco = ""
+    detalhe_preco = ""
+
+    if campo_preco:
+        preco = campo_preco.get_text(" ", strip=True)
+
+        elemento_detalhe = campo_preco.find("span")
+
+        if elemento_detalhe:
+            detalhe_preco = elemento_detalhe.get_text(
+                " ", strip=True
+            )
+
+    # Título
+    titulo = ""
+
+    if sopa.title:
+        titulo = sopa.title.get_text(" ", strip=True)
+        titulo = titulo.split(" · CulturaJá")[0]
+
+    # Fonte oficial
+    fonte_oficial = ""
+
+    for link in sopa.find_all("a", href=True):
+        if "fonte oficial" in link.get_text(" ", strip=True).lower():
+            fonte_oficial = urljoin(url, link["href"])
+            break
+
+    return {
+        "titulo": titulo,
+        "quando": quando,
+        "horario": horario,
+        "local": local,
+        "municipio": municipio,
+        "preco": preco,
+        "detalhe_preco": detalhe_preco,
+        "url_evento": url,
+        "fonte_oficial": fonte_oficial
+    }
+
+
+if __name__ == "__main__":
+    evento = extrair_evento(URL_EVENTO)
+
+    print("\nPORTO À BORLA - TESTE DE EXTRAÇÃO")
+    print("=" * 50)
+
+    for campo, valor in evento.items():
+        print(f"{campo.upper()}: {valor}")
