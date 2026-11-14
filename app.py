@@ -107,10 +107,19 @@ def apresentar_evento(evento):
             st.write(f"📌 **Local:** {local}")
 
         if preco:
-            st.write(f"🎟️ **Entrada:** {preco}")
-        else:
-            st.write("🎟️ **Entrada gratuita**")
+    preco_lower = preco.lower()
 
+    st.write("🎟️ **Entrada:** Gratuita")
+
+    if "inscrição" in preco_lower or "inscricao" in preco_lower:
+        st.caption("ℹ️ É necessária inscrição prévia.")
+
+    elif "lotação limitada" in preco_lower:
+        st.caption("ℹ️ Atividade sujeita a lotação limitada.")
+
+else:
+    st.write("🎟️ **Entrada:** Gratuita")
+    
         if publico:
             st.write(f"👥 **Público:** {publico}")
 
