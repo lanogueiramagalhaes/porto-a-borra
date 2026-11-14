@@ -1,0 +1,30 @@
+
+name: Testar fontes de eventos
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "fontes.py"
+      - "testar_fontes.py"
+      - "requirements.txt"
+      - ".github/workflows/testar-fontes.yml"
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Testar fontes
+        run: python testar_fontes.py
