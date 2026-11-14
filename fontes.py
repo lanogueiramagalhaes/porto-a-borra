@@ -6,7 +6,6 @@ FONTES = [
     {
         "nome": "CulturaJá",
         "url": "https://culturaja.pt/agenda/",
-        "url_gratuitos": "https://culturaja.pt/o-que-fazer/gratis/",
         "tipo": "Agenda cultural",
         "ambito": "Área Metropolitana do Porto",
         "prioridade": 1
