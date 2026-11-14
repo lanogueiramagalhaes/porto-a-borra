@@ -6,13 +6,18 @@ import requests
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
+# =====================================================
 # PORTO À BORLA
-# Recolha automática de eventos gratuitos da CulturaJá
-
+# Recolha e validação de eventos gratuitos
+# =====================================================
 
 URL_AGENDA = "https://culturaja.pt/o-que-fazer/gratis"
+
+FUSO_HORARIO = ZoneInfo("Europe/Lisbon")
 
 MUNICIPIOS = [
     "Amarante",
@@ -35,8 +40,26 @@ MUNICIPIOS = [
     "Vila Nova de Gaia"
 ]
 
-# Expressões que podem indicar que a gratuitidade
-# está sujeita a condições especiais.
+# Categorias utilizadas pelo Porto à Borla
+CATEGORIAS_VALIDAS = [
+    "Música",
+    "Exposições",
+    "Teatro",
+    "Cinema",
+    "Workshops",
+    "Desporto",
+    "Feiras e mercados",
+    "Ar livre",
+    "Conferências",
+    "Livros e ideias",
+    "Natureza e ar livre",
+    "Teatro e dança",
+    "Feiras e gastronomia",
+    "Outros"
+]
+
+# Indicações que podem significar que a gratuitidade
+# está limitada a determinados grupos.
 TERMOS_CONDICIONAIS = [
     "associados",
     "sócios",
@@ -44,11 +67,16 @@ TERMOS_CONDICIONAIS = [
     "mediante apresentação",
     "mediante comprovativo",
     "exclusivo para",
+    "exclusiva para",
     "apenas para",
     "reservado a",
     "reservada a",
     "cartão de estudante",
-    "cartao de estudante"
+    "cartao de estudante",
+    "gratuito para estudantes",
+    "gratuita para estudantes",
+    "gratuito para professores",
+    "gratuita para professores"
 ]
 
 sessao = requests.Session()
@@ -62,9 +90,11 @@ sessao.headers.update({
 })
 
 
-def obter_pagina(url, referer=None):
-    """Consulta uma página e devolve o seu conteúdo HTML."""
+# =====================================================
+# 1. CONSULTAR PÁGINAS
+# =====================================================
 
+def obter_pagina(url, referer=None):
     cabecalhos = {}
 
     if referer:
@@ -83,9 +113,8 @@ def obter_pagina(url, referer=None):
 
 
 def obter_campo(sopa, nome):
-    """Obtém o conteúdo associado a um campo dt/dd."""
-
     for dt in sopa.find_all("dt"):
+
         if dt.get_text(" ", strip=True) == nome:
             return dt.find_next_sibling("dd")
 
@@ -93,35 +122,172 @@ def obter_campo(sopa, nome):
 
 
 def obter_texto(elemento):
-    """Devolve texto limpo de um elemento HTML."""
-
     if elemento:
         return elemento.get_text(" ", strip=True)
 
     return ""
 
 
+# =====================================================
+# 2. DATAS DA SEMANA
+# =====================================================
+
+def obter_periodo_semana():
+    """
+    Devolve o intervalo de segunda-feira a domingo
+    da semana em que a recolha é executada.
+    """
+
+    hoje = datetime.now(FUSO_HORARIO).date()
+
+    segunda = hoje - timedelta(days=hoje.weekday())
+    domingo = segunda + timedelta(days=6)
+
+    return segunda, domingo
+
+
+def converter_data(data_texto):
+    """Converte uma data ISO para data local de Portugal."""
+
+    if not data_texto:
+        return None
+
+    try:
+        data = datetime.fromisoformat(
+            data_texto.replace("Z", "+00:00")
+        )
+
+        if data.tzinfo is None:
+            data = data.replace(tzinfo=FUSO_HORARIO)
+        else:
+            data = data.astimezone(FUSO_HORARIO)
+
+        return data.date()
+
+    except (ValueError, TypeError):
+        return None
+
+
+def evento_na_semana(data_inicio, data_fim, segunda, domingo):
+    """
+    Verifica se o evento decorre, pelo menos em parte,
+    durante a semana pretendida.
+    """
+
+    inicio = converter_data(data_inicio)
+    fim = converter_data(data_fim)
+
+    if not inicio or not fim:
+        return False
+
+    return inicio <= domingo and fim >= segunda
+
+
+# =====================================================
+# 3. DATAS E HORÁRIOS DOS CARTÕES
+# =====================================================
+
+def obter_datas_do_cartao(cartao):
+
+    inicio = ""
+    fim = ""
+
+    elemento_inicio = cartao.find(
+        attrs={"data-inicio": True}
+    )
+
+    elemento_fim = cartao.find(
+        attrs={"data-fim": True}
+    )
+
+    if elemento_inicio:
+        inicio = elemento_inicio.get("data-inicio", "")
+
+    if elemento_fim:
+        fim = elemento_fim.get("data-fim", "")
+
+    return inicio, fim
+
+
+def extrair_horarios(campo_quando):
+    """
+    Procura horários como 19:00, 14h30 ou 10h.
+    """
+
+    texto = obter_texto(campo_quando)
+
+    horarios = re.findall(
+        r"\b\d{1,2}(?::\d{2}|h\d{1,2})\b",
+        texto,
+        flags=re.IGNORECASE
+    )
+
+    # Evita repetir horários.
+    horarios_unicos = list(dict.fromkeys(horarios))
+
+    return " / ".join(horarios_unicos)
+
+
+# =====================================================
+# 4. LOCALIZAÇÃO
+# =====================================================
+
+def extrair_local_e_municipio(campo_onde, municipio_cartao):
+
+    local = ""
+    municipio = municipio_cartao
+
+    if not campo_onde:
+        return local, municipio
+
+    elemento_local = campo_onde.find("a")
+    elemento_municipio = campo_onde.find("span")
+
+    if elemento_local:
+        local = obter_texto(elemento_local)
+    else:
+        local = obter_texto(campo_onde)
+
+    if elemento_municipio:
+        municipio = obter_texto(elemento_municipio)
+
+    # Retira o município do fim do nome do local,
+    # caso apareça repetido.
+    if local.casefold() != municipio.casefold():
+
+        local = re.sub(
+            r"\s+" + re.escape(municipio) + r"$",
+            "",
+            local,
+            flags=re.IGNORECASE
+        ).strip()
+
+    return local, municipio
+
+
+# =====================================================
+# 5. VALIDAÇÃO DA GRATUITIDADE
+# =====================================================
+
 def gratuitidade_confirmada(campo_preco, detalhe_preco):
-    """
-    Só aceita eventos identificados como gratuitos
-    e sem condições especiais detetadas no texto.
-    """
 
     if campo_preco is None:
         return False
 
     classes = campo_preco.get("class", [])
 
+    # A CulturaJá identifica os eventos gratuitos
+    # com a classe "gratis".
     if "gratis" not in classes:
         return False
 
     texto = detalhe_preco.lower()
 
     for termo in TERMOS_CONDICIONAIS:
+
         if termo in texto:
             return False
 
-    # Tem de existir uma indicação explícita de gratuitidade.
     indicacoes_gratuitas = [
         "gratuito",
         "gratuita",
@@ -137,39 +303,52 @@ def gratuitidade_confirmada(campo_preco, detalhe_preco):
     )
 
 
-def obter_datas_do_cartao(cartao):
-    """
-    Tenta obter as datas estruturadas no cartão do evento.
-    Se não estiverem disponíveis, devolve campos vazios.
-    """
+# =====================================================
+# 6. CATEGORIAS
+# =====================================================
 
-    inicio = ""
-    fim = ""
+def normalizar_categoria(categoria):
 
-    elemento = cartao.find(
-        attrs={
-            "data-inicio": True
-        }
-    )
+    if not categoria:
+        return "Outros"
 
-    if elemento:
-        inicio = elemento.get("data-inicio", "")
+    if categoria in CATEGORIAS_VALIDAS:
+        return categoria
 
-    elemento = cartao.find(
-        attrs={
-            "data-fim": True
-        }
-    )
-
-    if elemento:
-        fim = elemento.get("data-fim", "")
-
-    return inicio, fim
+    return "Outros"
 
 
-def extrair_evento(url_evento, municipio_cartao, categoria_cartao,
-                   data_inicio, data_fim):
-    """Consulta a página individual e extrai os dados do evento."""
+# =====================================================
+# 7. FONTE OFICIAL
+# =====================================================
+
+def obter_fonte_oficial(sopa, url_evento):
+
+    for link in sopa.find_all("a", href=True):
+
+        texto_link = obter_texto(link).lower()
+
+        if "fonte oficial" in texto_link:
+
+            return urljoin(
+                url_evento,
+                link["href"]
+            )
+
+    return ""
+
+
+# =====================================================
+# 8. EXTRAIR EVENTO INDIVIDUAL
+# =====================================================
+
+def extrair_evento(
+    url_evento,
+    municipio_cartao,
+    categoria_cartao,
+    data_inicio,
+    data_fim
+):
 
     sopa = obter_pagina(url_evento, URL_AGENDA)
 
@@ -181,71 +360,62 @@ def extrair_evento(url_evento, municipio_cartao, categoria_cartao,
     campo_publico = obter_campo(sopa, "Para quem")
 
     quando = obter_texto(campo_quando)
-    local = ""
-    municipio = municipio_cartao
+    horario = extrair_horarios(campo_quando)
 
-    if campo_onde:
-        elemento_local = campo_onde.find("a")
-        elemento_municipio = campo_onde.find("span")
-
-        if elemento_local:
-            local = obter_texto(elemento_local)
-        else:
-            local = obter_texto(campo_onde)
-
-        if elemento_municipio:
-            municipio = obter_texto(elemento_municipio)
+    local, municipio = extrair_local_e_municipio(
+        campo_onde,
+        municipio_cartao
+    )
 
     preco = obter_texto(campo_preco)
 
     detalhe_preco = ""
 
     if campo_preco:
-        detalhe = campo_preco.find("span")
-
-        if detalhe:
-            detalhe_preco = obter_texto(detalhe)
+        detalhe_preco = obter_texto(
+            campo_preco.find("span")
+        )
 
     publico = obter_texto(campo_publico)
 
-    fonte_oficial = ""
+    fonte_oficial = obter_fonte_oficial(
+        sopa,
+        url_evento
+    )
 
-    for link in sopa.find_all("a", href=True):
-        texto_link = obter_texto(link).lower()
+    categoria = normalizar_categoria(
+        categoria_cartao
+    )
 
-        if "fonte oficial" in texto_link:
-            fonte_oficial = urljoin(
-                url_evento,
-                link["href"]
-            )
-            break
+    # Validações obrigatórias.
 
-    # Confirma se o município pertence à lista pretendida.
     if municipio not in MUNICIPIOS:
         return None
 
-    # Confirma se o preço é efetivamente gratuito.
     if not gratuitidade_confirmada(
         campo_preco,
         detalhe_preco
     ):
         return None
 
-    # Não publica eventos sem título ou local confirmado.
     if not titulo or not local:
         return None
 
     if "a confirmar" in local.lower():
         return None
 
+    # Só aceitamos eventos com ligação à fonte oficial.
+    if not fonte_oficial:
+        return None
+
     return {
         "titulo": titulo,
         "municipio": municipio,
-        "categoria": categoria_cartao,
+        "categoria": categoria,
         "quando": quando,
+        "horario": horario,
         "data_inicio": data_inicio,
         "data_fim": data_fim,
-        "horario": "",
         "local": local,
         "preco": preco,
         "detalhe_preco": detalhe_preco,
@@ -255,40 +425,61 @@ def extrair_evento(url_evento, municipio_cartao, categoria_cartao,
     }
 
 
-def recolher_eventos():
-    """Recolhe os eventos gratuitos disponíveis na agenda."""
+# =====================================================
+# 9. RECOLHER EVENTOS DA AGENDA
+# =====================================================
 
-    print("A consultar a agenda da CulturaJá...")
+def recolher_eventos():
+
+    segunda, domingo = obter_periodo_semana()
+
+    print("=" * 55)
+    print("PORTO À BORLA - RECOLHA DE EVENTOS")
+    print("=" * 55)
+
+    print(
+        f"Semana: {segunda.strftime('%d/%m/%Y')} "
+        f"a {domingo.strftime('%d/%m/%Y')}"
+    )
+
+    print("\nA consultar a agenda da CulturaJá...")
 
     sopa = obter_pagina(URL_AGENDA)
 
-    cartoes = sopa.find_all("article", class_="cartao")
+    cartoes = sopa.find_all(
+        "article",
+        class_="cartao"
+    )
 
     print(f"Cartões encontrados: {len(cartoes)}")
 
     eventos = []
     urls_processados = set()
 
+    excluidos_semana = 0
+    excluidos_validacao = 0
+
     for cartao in cartoes:
 
-        # Município
         municipio_elemento = cartao.find(
             class_="concelho"
         )
 
-        municipio = obter_texto(municipio_elemento)
+        municipio = obter_texto(
+            municipio_elemento
+        )
 
         if municipio not in MUNICIPIOS:
             continue
 
-        # Categoria
         categoria_elemento = cartao.find(
             class_="categoria"
         )
 
-        categoria = obter_texto(categoria_elemento)
+        categoria = obter_texto(
+            categoria_elemento
+        )
 
-        # Ligação individual do evento
         link_evento = cartao.find(
             "a",
             href=re.compile(r"/evento/")
@@ -307,11 +498,27 @@ def recolher_eventos():
 
         urls_processados.add(url_evento)
 
-        data_inicio, data_fim = obter_datas_do_cartao(cartao)
+        data_inicio, data_fim = obter_datas_do_cartao(
+            cartao
+        )
 
-        print(f"A analisar: {obter_texto(link_evento)}")
+        # Filtra a semana antes de consultar a página individual.
+        if not evento_na_semana(
+            data_inicio,
+            data_fim,
+            segunda,
+            domingo
+        ):
+            excluidos_semana += 1
+            continue
+
+        print(
+            f"\nA analisar: "
+            f"{obter_texto(link_evento)}"
+        )
 
         try:
+
             evento = extrair_evento(
                 url_evento,
                 municipio,
@@ -323,26 +530,40 @@ def recolher_eventos():
             if evento:
                 eventos.append(evento)
                 print("  -> Evento aceite.")
+
             else:
+                excluidos_validacao += 1
                 print("  -> Evento excluído na validação.")
 
         except requests.RequestException as erro:
+
+            excluidos_validacao += 1
             print(f"  -> Erro de acesso: {erro}")
 
         except Exception as erro:
+
+            excluidos_validacao += 1
             print(f"  -> Erro na leitura: {erro}")
 
-        # Pequena pausa para não sobrecarregar a fonte.
         time.sleep(0.5)
 
-    return eventos
+    return eventos, segunda, domingo, excluidos_semana, excluidos_validacao
 
+
+# =====================================================
+# 10. GUARDAR RESULTADOS
+# =====================================================
 
 if __name__ == "__main__":
 
-    eventos = recolher_eventos()
+    (
+        eventos,
+        segunda,
+        domingo,
+        excluidos_semana,
+        excluidos_validacao
+    ) = recolher_eventos()
 
-    # Guarda os eventos num ficheiro JSON.
     with open(
         "eventos.json",
         "w",
@@ -360,5 +581,8 @@ if __name__ == "__main__":
     print("RECOLHA CONCLUÍDA")
     print("=" * 55)
 
+    print(f"Semana analisada: {segunda} a {domingo}")
     print(f"Eventos aceites: {len(eventos)}")
+    print(f"Excluídos por data: {excluidos_semana}")
+    print(f"Excluídos na validação: {excluidos_validacao}")
     print("Ficheiro criado: eventos.json")
