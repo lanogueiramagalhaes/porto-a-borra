@@ -11,6 +11,10 @@ on:
       - "requirements.txt"
       - ".github/workflows/testar-fontes.yml"
 
+# Permite ao workflow guardar ficheiros no repositório.
+permissions:
+  contents: write
+
 jobs:
   testar-e-recolher:
     runs-on: ubuntu-latest
@@ -33,10 +37,16 @@ jobs:
       - name: Recolher eventos
         run: python recolher_eventos.py
 
-      - name: Guardar ficheiro de eventos
-        uses: actions/upload-artifact@v4
-        with:
-          name: eventos-recolhidos
-          path: eventos.json
-          if-no-files-found: error
-          retention-days: 7
+      - name: Guardar eventos no repositório
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add eventos.json
+
+          if git diff --cached --quiet; then
+            echo "Não existem alterações aos eventos."
+          else
+            git commit -m "Atualizar eventos recolhidos"
+            git push
+          fi
