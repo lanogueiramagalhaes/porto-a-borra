@@ -1,12 +1,18 @@
 
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+
+CABECALHOS = {
+    "User-Agent": "Mozilla/5.0 PortoABorra/1.0"
+}
 
 
 def obter_pagina(url):
     resposta = requests.get(
         url,
-        headers={"User-Agent": "Mozilla/5.0 PortoABorra/1.0"},
+        headers=CABECALHOS,
         timeout=20
     )
     resposta.raise_for_status()
@@ -15,85 +21,73 @@ def obter_pagina(url):
     return BeautifulSoup(resposta.text, "html.parser")
 
 
-def testar_culturaja():
+def analisar_eventos(nome_fonte, url, seletor, limite=3):
     print("\n" + "=" * 60)
-    print("CULTURAJÁ - ANÁLISE DOS CARTÕES")
+    print(nome_fonte)
 
-    sopa = obter_pagina("https://culturaja.pt/agenda/")
-
-    cartoes = sopa.select("article.cartao")
+    sopa = obter_pagina(url)
+    cartoes = sopa.select(seletor)
 
     print("Cartões encontrados:", len(cartoes))
 
-    for numero, cartao in enumerate(cartoes[:2], start=1):
-        print(f"\n--- CARTÃO {numero} ---")
+    links_eventos = []
 
-        print("TEXTO COMPLETO:")
-        print(cartao.get_text(" ", strip=True))
+    for cartao in cartoes:
+        link = cartao.find("a", href=True)
 
-        print("\nATRIBUTOS DOS ELEMENTOS:")
-        for elemento in cartao.find_all(["a", "button", "span"]):
-            if elemento.name == "button":
-                print("BUTTON:", elemento.attrs)
+        if link:
+            endereco = urljoin(url, link["href"])
 
-            elif elemento.name == "a":
-                print("LINK:", elemento.get_text(" ", strip=True))
-                print("URL:", elemento.get("href"))
+            if endereco not in links_eventos:
+                links_eventos.append(endereco)
 
-            elif elemento.get("class"):
-                print(
-                    "SPAN:",
-                    elemento.get("class"),
-                    elemento.get_text(" ", strip=True)
-                )
+    for numero, endereco in enumerate(links_eventos[:limite], start=1):
+        print("\n" + "-" * 60)
+        print("EVENTO", numero)
+        print("URL:", endereco)
 
-        print("\nHTML COMPLETO DO CARTÃO:")
-        print(cartao.prettify()[:7000])
+        try:
+            pagina = obter_pagina(endereco)
 
+            titulo = (
+                pagina.title.get_text(strip=True)
+                if pagina.title else "Não identificado"
+            )
 
-def testar_agenda_porto():
-    print("\n" + "=" * 60)
-    print("AGENDA PORTO - ANÁLISE DOS LINKS")
+            print("TÍTULO DA PÁGINA:", titulo)
 
-    sopa = obter_pagina("https://www.agenda-porto.pt/")
+            texto = pagina.get_text(" ", strip=True)
 
-    links = sopa.find_all("a", href=True)
+            print("\nTEXTO DA PÁGINA:")
+            print(texto[:4500])
 
-    encontrados = 0
+            print("\nLIGAÇÕES ENCONTRADAS:")
 
-    for link in links:
-        url = link.get("href", "")
+            for link in pagina.find_all("a", href=True):
+                texto_link = link.get_text(" ", strip=True)
+                url_link = urljoin(endereco, link["href"])
 
-        if any(
-            palavra in url.lower()
-            for palavra in ["evento", "ciclo", "atividade"]
-        ):
-            print("\nTÍTULO:", link.get_text(" ", strip=True))
-            print("URL:", url)
+                if texto_link:
+                    print("-", texto_link[:100], "|", url_link)
 
-            pai = link.parent
-
-            if pai:
-                print("HTML DO ELEMENTO:")
-                print(pai.prettify()[:2500])
-
-            encontrados += 1
-
-            if encontrados >= 5:
-                break
-
-    print("\nLinks de eventos analisados:", encontrados)
+        except Exception as erro:
+            print("Erro ao analisar o evento:", erro)
 
 
 if __name__ == "__main__":
-    try:
-        testar_culturaja()
-    except Exception as erro:
-        print("Erro no CulturaJá:", erro)
 
-    try:
-        testar_agenda_porto()
-    except Exception as erro:
-        print("Erro na Agenda Porto:", erro)
+    analisar_eventos(
+        "CULTURAJÁ",
+        "https://culturaja.pt/agenda/",
+        "article.cartao",
+        limite=3
+    )
 
-    print("\nAnálise concluída.")
+    analisar_eventos(
+        "AGENDA PORTO",
+        "https://www.agenda-porto.pt/",
+        "div[data-bl-name='Card. Card Event']",
+        limite=3
+    )
+
+    print("\nAnálise das páginas individuais concluída.")
