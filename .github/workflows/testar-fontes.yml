@@ -1,5 +1,5 @@
 
-name: Testar fontes de eventos
+name: Testar fontes e recolher eventos
 
 on:
   workflow_dispatch:
@@ -7,11 +7,12 @@ on:
     paths:
       - "fontes.py"
       - "testar_fontes.py"
+      - "recolher_eventos.py"
       - "requirements.txt"
       - ".github/workflows/testar-fontes.yml"
 
 jobs:
-  testar:
+  testar-e-recolher:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,3 +29,14 @@ jobs:
 
       - name: Testar fontes
         run: python testar_fontes.py
+
+      - name: Recolher eventos
+        run: python recolher_eventos.py
+
+      - name: Guardar ficheiro de eventos
+        uses: actions/upload-artifact@v4
+        with:
+          name: eventos-recolhidos
+          path: eventos.json
+          if-no-files-found: error
+          retention-days: 7
