@@ -11,74 +11,47 @@ URL_EVENTO = (
 
 sessao = requests.Session()
 
-CABECALHOS = {
+sessao.headers.update({
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
     ),
-    "Accept": (
-        "text/html,application/xhtml+xml,"
-        "application/xml;q=0.9,*/*;q=0.8"
-    ),
     "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.8"
-}
-
-sessao.headers.update(CABECALHOS)
-
-print("1. A consultar a agenda...")
-
-resposta_agenda = sessao.get(
-    URL_AGENDA,
-    timeout=20
-)
-
-print("Estado da agenda:", resposta_agenda.status_code)
-
-if resposta_agenda.status_code != 200:
-    print("Não foi possível consultar a agenda.")
-    raise SystemExit(0)
-
-print("\n2. A consultar a página do evento...")
-
-sessao.headers.update({
-    "Referer": URL_AGENDA
 })
 
-resposta_evento = sessao.get(
+print("A consultar a agenda...")
+agenda = sessao.get(URL_AGENDA, timeout=20)
+agenda.raise_for_status()
+
+print("A consultar o evento...")
+evento = sessao.get(
     URL_EVENTO,
+    headers={"Referer": URL_AGENDA},
     timeout=20
 )
+evento.raise_for_status()
+evento.encoding = evento.apparent_encoding
 
-print("Estado do evento:", resposta_evento.status_code)
+sopa = BeautifulSoup(evento.text, "html.parser")
 
-if resposta_evento.status_code == 200:
-    resposta_evento.encoding = resposta_evento.apparent_encoding
+for campo in ["Quando", "Onde", "Preço"]:
+    print("\n" + "=" * 60)
+    print("CAMPO:", campo)
 
-    sopa = BeautifulSoup(
-        resposta_evento.text,
-        "html.parser"
+    elementos = sopa.find_all(
+        string=lambda texto: texto and texto.strip() == campo
     )
 
-    print("\nTítulo da página:")
-    print(sopa.title.get_text(strip=True) if sopa.title else "Não encontrado")
+    if not elementos:
+        print("Campo não encontrado")
+        continue
 
-    print("\nTexto dos campos:")
+    for elemento in elementos[:2]:
+        print("\nESTRUTURA HTML:")
 
-    texto = sopa.get_text(" ", strip=True)
+        pai = elemento.parent
 
-    for campo in ["Quando", "Onde", "Preço"]:
-        posicao = texto.find(campo)
-
-        if posicao >= 0:
-            print(texto[posicao:posicao + 250])
+        if pai.parent:
+            print(pai.parent.prettify()[:3000])
         else:
-            print(campo, "não encontrado")
-
-elif resposta_evento.status_code == 403:
-    print(
-        "A CulturaJá recusou o acesso automático "
-        "à página individual."
-    )
-
-else:
-    print("Resposta inesperada:", resposta_evento.status_code)
+            print(pai.prettify()[:3000])
