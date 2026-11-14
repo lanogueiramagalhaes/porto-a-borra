@@ -4,72 +4,55 @@ from bs4 import BeautifulSoup
 from fontes import listar_fontes
 
 
-def testar_fonte(fonte):
-    nome = fonte["nome"]
-    url = fonte["url"]
-
+def inspecionar_fonte(fonte):
     print("\n" + "=" * 60)
-    print(f"FONTE: {nome}")
-    print(f"URL: {url}")
+    print("FONTE:", fonte["nome"])
 
-    try:
-        resposta = requests.get(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 PortoABorra/1.0"
-            },
-            timeout=20
-        )
+    resposta = requests.get(
+        fonte["url"],
+        headers={"User-Agent": "Mozilla/5.0 PortoABorra/1.0"},
+        timeout=20
+    )
 
-        print(f"Estado HTTP: {resposta.status_code}")
+    resposta.raise_for_status()
+    resposta.encoding = resposta.apparent_encoding
 
-        resposta.raise_for_status()
+    sopa = BeautifulSoup(resposta.text, "html.parser")
 
-        # Corrigir a interpretação dos caracteres
-        resposta.encoding = resposta.apparent_encoding
+    titulos = sopa.find_all(["h2", "h3", "h4"])
 
-        sopa = BeautifulSoup(resposta.text, "html.parser")
+    print("\nESTRUTURA DOS EVENTOS:")
 
-        titulo = sopa.title.get_text(strip=True) if sopa.title else "Não identificado"
+    encontrados = 0
 
-        print(f"\nTÍTULO: {titulo}")
+    for titulo in titulos:
+        nome = titulo.get_text(" ", strip=True)
 
-        print("\nTÍTULOS ENCONTRADOS:")
+        if not nome or len(nome) < 4:
+            continue
 
-        for elemento in sopa.find_all(["h1", "h2", "h3"])[:20]:
-            texto = elemento.get_text(" ", strip=True)
+        elemento = titulo
 
-            if texto:
-                print("-", texto)
+        # Sobe na estrutura HTML para encontrar o cartão
+        for _ in range(3):
+            if elemento.parent:
+                elemento = elemento.parent
 
-        print("\nTEXTO DA PÁGINA:")
+        print("\nTÍTULO:", nome)
+        print("HTML DO CARTÃO:")
+        print(elemento.prettify()[:1800])
 
-        texto_pagina = sopa.get_text(" ", strip=True)
-        print(texto_pagina[:2500])
+        encontrados += 1
 
-        print("\nPRIMEIROS LINKS ENCONTRADOS:")
+        if encontrados >= 5:
+            break
 
-        total = 0
-
-        for link in sopa.find_all("a", href=True):
-            texto = link.get_text(" ", strip=True)
-            endereco = link["href"]
-
-            if texto and len(texto) > 2:
-                print(f"- {texto[:100]} | {endereco}")
-                total += 1
-
-            if total >= 25:
-                break
-
-        print(f"\nTotal de links apresentados: {total}")
-
-    except requests.exceptions.RequestException as erro:
-        print(f"Erro de acesso: {erro}")
+    print("\nTotal de cartões inspecionados:", encontrados)
 
 
 if __name__ == "__main__":
     for fonte in listar_fontes():
-        testar_fonte(fonte)
-
-    print("\nAnálise das páginas concluída.")
+        try:
+            inspecionar_fonte(fonte)
+        except Exception as erro:
+            print("Erro:", erro)
