@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 # =====================================================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIGURAÇÃO
 # =====================================================
 
 st.set_page_config(
@@ -14,58 +14,31 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# =====================================================
-# MUNICÍPIOS E CATEGORIAS
-# =====================================================
-
 MUNICIPIOS = [
     "Todos os municípios",
-    "Amarante",
-    "Baião",
-    "Felgueiras",
-    "Gondomar",
-    "Lousada",
-    "Maia",
-    "Marco de Canaveses",
-    "Matosinhos",
-    "Paços de Ferreira",
-    "Paredes",
-    "Penafiel",
-    "Porto",
-    "Póvoa de Varzim",
-    "Santo Tirso",
-    "Trofa",
-    "Valongo",
-    "Vila do Conde",
-    "Vila Nova de Gaia"
+    "Amarante", "Baião", "Felgueiras", "Gondomar",
+    "Lousada", "Maia", "Marco de Canaveses",
+    "Matosinhos", "Paços de Ferreira", "Paredes",
+    "Penafiel", "Porto", "Póvoa de Varzim",
+    "Santo Tirso", "Trofa", "Valongo",
+    "Vila do Conde", "Vila Nova de Gaia"
 ]
 
 CATEGORIAS = [
     "Todas as categorias",
-    "Música",
-    "Exposições",
-    "Teatro",
-    "Teatro e dança",
-    "Cinema",
-    "Workshops",
-    "Desporto",
-    "Feiras e mercados",
-    "Feiras e gastronomia",
-    "Ar livre",
-    "Natureza e ar livre",
-    "Conferências",
-    "Livros e ideias",
-    "Outros"
+    "Música", "Exposições", "Teatro", "Teatro e dança",
+    "Cinema", "Workshops", "Desporto",
+    "Feiras e mercados", "Feiras e gastronomia",
+    "Ar livre", "Natureza e ar livre",
+    "Conferências", "Livros e ideias", "Outros"
 ]
 
 
 # =====================================================
-# LEITURA DOS EVENTOS
+# CARREGAR EVENTOS
 # =====================================================
 
 def carregar_eventos():
-
     ficheiro = Path("eventos.json")
 
     if not ficheiro.exists():
@@ -73,38 +46,29 @@ def carregar_eventos():
 
     try:
         with open(ficheiro, "r", encoding="utf-8") as f:
-            eventos = json.load(f)
+            dados = json.load(f)
 
-        if isinstance(eventos, list):
-            return eventos
-
-        return []
+        return dados if isinstance(dados, list) else []
 
     except (json.JSONDecodeError, OSError):
         return []
 
 
 # =====================================================
-# FILTRAGEM DOS EVENTOS
+# FILTRAR EVENTOS
 # =====================================================
 
 def filtrar_eventos(eventos, municipio, categoria):
-
     resultados = []
 
     for evento in eventos:
+        if municipio != "Todos os municípios":
+            if evento.get("municipio") != municipio:
+                continue
 
-        if (
-            municipio != "Todos os municípios"
-            and evento.get("municipio") != municipio
-        ):
-            continue
-
-        if (
-            categoria != "Todas as categorias"
-            and evento.get("categoria") != categoria
-        ):
-            continue
+        if categoria != "Todas as categorias":
+            if evento.get("categoria") != categoria:
+                continue
 
         resultados.append(evento)
 
@@ -112,7 +76,58 @@ def filtrar_eventos(eventos, municipio, categoria):
 
 
 # =====================================================
-# APRESENTAÇÃO DA PÁGINA
+# APRESENTAÇÃO DE CADA EVENTO
+# =====================================================
+
+def apresentar_evento(evento):
+
+    titulo = evento.get("titulo", "Evento sem título")
+    municipio = evento.get("municipio", "")
+    categoria = evento.get("categoria", "")
+    quando = evento.get("quando", "")
+    horario = evento.get("horario", "")
+    local = evento.get("local", "")
+    preco = evento.get("preco", "")
+    publico = evento.get("publico", "")
+    url_evento = evento.get("url_evento", "")
+    fonte_oficial = evento.get("fonte_oficial", "")
+
+    with st.container(border=True):
+
+        st.markdown(f"### {titulo}")
+
+        st.caption(f"📍 {municipio}  ·  🎭 {categoria}")
+
+        if quando:
+            st.write(f"📅 **Data e horário:** {quando}")
+        elif horario:
+            st.write(f"🕒 **Horário:** {horario}")
+
+        if local:
+            st.write(f"📌 **Local:** {local}")
+
+        if preco:
+            st.write(f"🎟️ **Entrada:** {preco}")
+        else:
+            st.write("🎟️ **Entrada gratuita**")
+
+        if publico:
+            st.write(f"👥 **Público:** {publico}")
+
+        links = []
+
+        if url_evento:
+            links.append(f"[Ver detalhes do evento]({url_evento})")
+
+        if fonte_oficial:
+            links.append(f"[Consultar fonte oficial]({fonte_oficial})")
+
+        if links:
+            st.markdown(" · ".join(links))
+
+
+# =====================================================
+# PÁGINA PRINCIPAL
 # =====================================================
 
 st.title("🎟️ Porto à Borla")
@@ -122,37 +137,26 @@ st.subheader(
 )
 
 st.write(
-    "A tua agenda inteligente de eventos, "
-    "cultura e atividades gratuitas."
+    "A tua agenda de eventos, cultura e atividades gratuitas."
 )
 
 st.divider()
-
-
-# =====================================================
-# FILTROS
-# =====================================================
 
 col1, col2 = st.columns(2)
 
 with col1:
     municipio = st.selectbox(
-        "📍 Município",
+        "📍 Escolhe um município",
         MUNICIPIOS
     )
 
 with col2:
     categoria = st.selectbox(
-        "🎭 Categoria",
+        "🎭 Escolhe uma categoria",
         CATEGORIAS
     )
 
 st.divider()
-
-
-# =====================================================
-# LISTAGEM DOS EVENTOS
-# =====================================================
 
 st.subheader("📅 Próximos eventos")
 
@@ -164,85 +168,24 @@ eventos_filtrados = filtrar_eventos(
     categoria
 )
 
-
 if not eventos:
-
     st.info(
         "Ainda não existem eventos disponíveis. "
-        "Estamos a preparar a ligação à base de dados."
+        "A próxima recolha poderá atualizar esta agenda."
     )
 
 elif not eventos_filtrados:
-
     st.warning(
         "Não foram encontrados eventos para os filtros selecionados."
     )
 
 else:
-
     st.write(
-        f"Foram encontrados **{len(eventos_filtrados)} eventos**."
+        f"Encontrámos **{len(eventos_filtrados)} eventos**."
     )
 
     for evento in eventos_filtrados:
-
-        with st.container(border=True):
-
-            st.markdown(
-                f"### {evento.get('titulo', 'Evento sem título')}"
-            )
-
-            st.caption(
-                f"📍 {evento.get('municipio', '')} "
-                f"· {evento.get('categoria', '')}"
-            )
-
-            quando = evento.get("quando", "")
-            horario = evento.get("horario", "")
-            local = evento.get("local", "")
-
-            if quando:
-                st.write(f"📅 **Quando:** {quando}")
-
-            if horario:
-                st.write(f"🕒 **Horário:** {horario}")
-
-            if local:
-                st.write(f"📌 **Local:** {local}")
-
-            detalhe_preco = evento.get("detalhe_preco", "")
-
-            if detalhe_preco:
-                st.write(f"🎟️ **Entrada:** {detalhe_preco}")
-            else:
-                st.write("🎟️ **Entrada gratuita**")
-
-            publico = evento.get("publico", "")
-
-            if publico:
-                st.write(f"👥 **Público:** {publico}")
-
-            url_evento = evento.get("url_evento", "")
-            fonte_oficial = evento.get("fonte_oficial", "")
-
-            col_a, col_b = st.columns(2)
-
-            with col_a:
-                if url_evento:
-                    st.markdown(
-                        f"[Ver detalhes do evento]({url_evento})"
-                    )
-
-            with col_b:
-                if fonte_oficial:
-                    st.markdown(
-                        f"[Consultar fonte oficial]({fonte_oficial})"
-                    )
-
-
-# =====================================================
-# RODAPÉ
-# =====================================================
+        apresentar_evento(evento)
 
 st.divider()
 
