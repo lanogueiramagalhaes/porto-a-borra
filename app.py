@@ -62,6 +62,7 @@ def filtrar_eventos(eventos, municipio, categoria):
     resultados = []
 
     for evento in eventos:
+
         if municipio != "Todos os municípios":
             if evento.get("municipio") != municipio:
                 continue
@@ -88,6 +89,7 @@ def apresentar_evento(evento):
     horario = evento.get("horario", "")
     local = evento.get("local", "")
     preco = evento.get("preco", "")
+    detalhe_preco = evento.get("detalhe_preco", "")
     publico = evento.get("publico", "")
     url_evento = evento.get("url_evento", "")
     fonte_oficial = evento.get("fonte_oficial", "")
@@ -106,23 +108,25 @@ def apresentar_evento(evento):
         if local:
             st.write(f"📌 **Local:** {local}")
 
-        if preco:
-    preco_lower = preco.lower()
+        # Informação sobre a entrada
+        texto_preco = f"{preco} {detalhe_preco}".strip()
+        preco_lower = texto_preco.lower()
 
-    st.write("🎟️ **Entrada:** Gratuita")
+        st.write("🎟️ **Entrada:** Gratuita")
 
-    if "inscrição" in preco_lower or "inscricao" in preco_lower:
-        st.caption("ℹ️ É necessária inscrição prévia.")
+        if "inscrição" in preco_lower or "inscricao" in preco_lower:
+            st.caption("ℹ️ É necessária inscrição prévia.")
 
-    elif "lotação limitada" in preco_lower:
-        st.caption("ℹ️ Atividade sujeita a lotação limitada.")
+        if "lotação limitada" in preco_lower or "lotacao limitada" in preco_lower:
+            st.caption("ℹ️ Atividade sujeita a lotação limitada.")
 
-else:
-    st.write("🎟️ **Entrada:** Gratuita")
-    
+        if "reserva" in preco_lower:
+            st.caption("ℹ️ Consulta as condições de reserva.")
+
         if publico:
             st.write(f"👥 **Público:** {publico}")
 
+        # Ligações
         links = []
 
         if url_evento:
@@ -151,6 +155,11 @@ st.write(
 
 st.divider()
 
+
+# =====================================================
+# FILTROS
+# =====================================================
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -167,6 +176,11 @@ with col2:
 
 st.divider()
 
+
+# =====================================================
+# EVENTOS
+# =====================================================
+
 st.subheader("📅 Próximos eventos")
 
 eventos = carregar_eventos()
@@ -178,23 +192,31 @@ eventos_filtrados = filtrar_eventos(
 )
 
 if not eventos:
+
     st.info(
         "Ainda não existem eventos disponíveis. "
         "A próxima recolha poderá atualizar esta agenda."
     )
 
 elif not eventos_filtrados:
+
     st.warning(
         "Não foram encontrados eventos para os filtros selecionados."
     )
 
 else:
+
     st.write(
         f"Encontrámos **{len(eventos_filtrados)} eventos**."
     )
 
     for evento in eventos_filtrados:
         apresentar_evento(evento)
+
+
+# =====================================================
+# RODAPÉ
+# =====================================================
 
 st.divider()
 
