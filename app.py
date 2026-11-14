@@ -2,6 +2,7 @@
 import streamlit as st
 import json
 from pathlib import Path
+from datetime import date, datetime, timedelta
 
 
 # =====================================================
@@ -39,6 +40,7 @@ CATEGORIAS = [
 # =====================================================
 
 def carregar_eventos():
+
     ficheiro = Path("eventos.json")
 
     if not ficheiro.exists():
@@ -55,20 +57,80 @@ def carregar_eventos():
 
 
 # =====================================================
+# CONVERTER DATAS
+# =====================================================
+
+def converter_data(valor):
+
+    if not valor:
+        return None
+
+    try:
+        return datetime.fromisoformat(
+            valor.replace("Z", "+00:00")
+        ).date()
+
+    except (ValueError, TypeError):
+        try:
+            return date.fromisoformat(valor[:10])
+        except (ValueError, TypeError):
+            return None
+
+
+# =====================================================
 # FILTRAR EVENTOS
 # =====================================================
 
-def filtrar_eventos(eventos, municipio, categoria):
+def filtrar_eventos(
+    eventos,
+    municipio,
+    categoria,
+    pesquisa,
+    data_inicio_filtro,
+    data_fim_filtro
+):
+
     resultados = []
 
     for evento in eventos:
 
+        # Filtro por município
         if municipio != "Todos os municípios":
             if evento.get("municipio") != municipio:
                 continue
 
+        # Filtro por categoria
         if categoria != "Todas as categorias":
             if evento.get("categoria") != categoria:
+                continue
+
+        # Pesquisa por nome
+        if pesquisa:
+            titulo = evento.get("titulo", "").lower()
+
+            if pesquisa.lower() not in titulo:
+                continue
+
+        # Filtro por período
+        if data_inicio_filtro and data_fim_filtro:
+
+            inicio_evento = converter_data(
+                evento.get("data_inicio")
+            )
+
+            fim_evento = converter_data(
+                evento.get("data_fim")
+            )
+
+            if not inicio_evento or not fim_evento:
+                continue
+
+            # O evento tem de decorrer em pelo menos
+            # um dia dentro do período selecionado.
+            if (
+                inicio_evento > data_fim_filtro
+                or fim_evento < data_inicio_filtro
+            ):
                 continue
 
         resultados.append(evento)
@@ -98,7 +160,9 @@ def apresentar_evento(evento):
 
         st.markdown(f"### {titulo}")
 
-        st.caption(f"📍 {municipio}  ·  🎭 {categoria}")
+        st.caption(
+            f"📍 {municipio}  ·  🎭 {categoria}"
+        )
 
         if quando:
             st.write(f"📅 **Data e horário:** {quando}")
@@ -130,10 +194,14 @@ def apresentar_evento(evento):
         links = []
 
         if url_evento:
-            links.append(f"[Ver detalhes do evento]({url_evento})")
+            links.append(
+                f"[Ver detalhes do evento]({url_evento})"
+            )
 
         if fonte_oficial:
-            links.append(f"[Consultar fonte oficial]({fonte_oficial})")
+            links.append(
+                f"[Consultar fonte oficial]({fonte_oficial})"
+            )
 
         if links:
             st.markdown(" · ".join(links))
@@ -157,6 +225,18 @@ st.divider()
 
 
 # =====================================================
+# PESQUISA
+# =====================================================
+
+st.subheader("🔎 Encontra o teu próximo evento")
+
+pesquisa = st.text_input(
+    "Pesquisar por nome do evento",
+    placeholder="Ex.: caminhada, música, teatro..."
+)
+
+
+# =====================================================
 # FILTROS
 # =====================================================
 
@@ -164,54 +244,101 @@ col1, col2 = st.columns(2)
 
 with col1:
     municipio = st.selectbox(
-        "📍 Escolhe um município",
+        "📍 Município",
         MUNICIPIOS
     )
 
 with col2:
     categoria = st.selectbox(
-        "🎭 Escolhe uma categoria",
+        "🎭 Categoria",
         CATEGORIAS
     )
+
+
+# =====================================================
+# FILTRO POR DATA
+# =====================================================
+
+with st.expander("📅 Filtrar por período"):
+
+    ativar_filtro_data = st.checkbox(
+        "Quero escolher as datas dos eventos"
+    )
+
+    data_inicio_filtro = None
+    data_fim_filtro = None
+
+    if ativar_filtro_data:
+
+        hoje = date.today()
+
+        col_data1, col_data2 = st.columns(2)
+
+        with col_data1:
+            data_inicio_filtro = st.date_input(
+                "Data inicial",
+                value=hoje,
+                format="DD/MM/YYYY"
+            )
+
+        with col_data2:
+            data_fim_filtro = st.date_input(
+                "Data final",
+                value=hoje + timedelta(days=7),
+                min_value=data_inicio_filtro,
+                format="DD/MM/YYYY"
+            )
+
 
 st.divider()
 
 
 # =====================================================
-# EVENTOS
+# APRESENTAÇÃO DOS EVENTOS
 # =====================================================
 
 st.subheader("📅 Próximos eventos")
 
 eventos = carregar_eventos()
 
-eventos_filtrados = filtrar_eventos(
-    eventos,
-    municipio,
-    categoria
-)
-
-if not eventos:
-
-    st.info(
-        "Ainda não existem eventos disponíveis. "
-        "A próxima recolha poderá atualizar esta agenda."
-    )
-
-elif not eventos_filtrados:
+if ativar_filtro_data and data_inicio_filtro > data_fim_filtro:
 
     st.warning(
-        "Não foram encontrados eventos para os filtros selecionados."
+        "A data final não pode ser anterior à data inicial."
     )
 
 else:
 
-    st.write(
-        f"Encontrámos **{len(eventos_filtrados)} eventos**."
+    eventos_filtrados = filtrar_eventos(
+        eventos,
+        municipio,
+        categoria,
+        pesquisa,
+        data_inicio_filtro if ativar_filtro_data else None,
+        data_fim_filtro if ativar_filtro_data else None
     )
 
-    for evento in eventos_filtrados:
-        apresentar_evento(evento)
+    if not eventos:
+
+        st.info(
+            "Ainda não existem eventos disponíveis. "
+            "A próxima recolha poderá atualizar esta agenda."
+        )
+
+    elif not eventos_filtrados:
+
+        st.warning(
+            "Não foram encontrados eventos com os critérios selecionados."
+        )
+
+    else:
+
+        st.write(
+            f"Encontrámos **{len(eventos_filtrados)} eventos**."
+        )
+
+        for evento in eventos_filtrados:
+            apresentar_evento(evento)
 
 
 # =====================================================
