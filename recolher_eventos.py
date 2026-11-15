@@ -2,11 +2,12 @@
 import json
 import re
 import time
+import calendar
 import requests
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from datetime import datetime, timedelta
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
 
@@ -111,16 +112,36 @@ def obter_texto(elemento):
 
 
 # =========================================================
-# DATAS DA SEMANA
+# PERÍODO DE RECOLHA: HOJE ATÉ DOIS MESES DEPOIS
 # =========================================================
 
-def obter_periodo_semana():
+def adicionar_meses(data_original, meses):
+    mes_total = data_original.month - 1 + meses
+
+    ano = data_original.year + mes_total // 12
+    mes = mes_total % 12 + 1
+
+    dia = min(
+        data_original.day,
+        calendar.monthrange(ano, mes)[1]
+    )
+
+    return data_original.replace(
+        year=ano,
+        month=mes,
+        day=dia
+    )
+
+
+def obter_periodo_recolha():
     hoje = datetime.now(FUSO_HORARIO).date()
 
-    segunda = hoje - timedelta(days=hoje.weekday())
-    domingo = segunda + timedelta(days=6)
+    fim_periodo = adicionar_meses(
+        hoje,
+        2
+    )
 
-    return segunda, domingo
+    return hoje, fim_periodo
 
 
 def converter_data(data_texto):
@@ -143,14 +164,24 @@ def converter_data(data_texto):
         return None
 
 
-def evento_na_semana(data_inicio, data_fim, segunda, domingo):
+def evento_no_periodo(
+    data_inicio,
+    data_fim,
+    inicio_periodo,
+    fim_periodo
+):
     inicio = converter_data(data_inicio)
     fim = converter_data(data_fim)
 
     if not inicio or not fim:
         return False
 
-    return inicio <= domingo and fim >= segunda
+    # O evento é aceite se tiver alguma parte
+    # dentro do período de recolha.
+    return (
+        inicio <= fim_periodo
+        and fim >= inicio_periodo
+    )
 
 
 def obter_datas_do_cartao(cartao):
@@ -242,8 +273,7 @@ def gratuitidade_confirmada(campo_preco, detalhe_preco):
     if "gratis" not in classes:
         return False
 
-    # Analisa o texto completo do preço, não apenas o conteúdo
-    # da etiqueta interna.
+    # Analisa o texto completo do preço.
     texto = obter_texto(campo_preco).lower()
 
     for termo in TERMOS_CONDICIONAIS:
@@ -377,15 +407,15 @@ def extrair_evento(
 # =========================================================
 
 def recolher_eventos():
-    segunda, domingo = obter_periodo_semana()
+    inicio_periodo, fim_periodo = obter_periodo_recolha()
 
     print("=" * 55)
     print("PORTO À BORLA - RECOLHA DE EVENTOS")
     print("=" * 55)
 
     print(
-        f"Semana: {segunda.strftime('%d/%m/%Y')} "
-        f"a {domingo.strftime('%d/%m/%Y')}"
+        f"Período: {inicio_periodo.strftime('%d/%m/%Y')} "
+        f"a {fim_periodo.strftime('%d/%m/%Y')}"
     )
 
     print("\nA consultar a agenda da CulturaJá...")
@@ -402,7 +432,7 @@ def recolher_eventos():
     eventos = []
     urls_processados = set()
 
-    excluidos_semana = 0
+    excluidos_periodo = 0
     excluidos_validacao = 0
 
     for cartao in cartoes:
@@ -444,13 +474,13 @@ def recolher_eventos():
             cartao
         )
 
-        if not evento_na_semana(
+        if not evento_no_periodo(
             data_inicio,
             data_fim,
-            segunda,
-            domingo
+            inicio_periodo,
+            fim_periodo
         ):
-            excluidos_semana += 1
+            excluidos_periodo += 1
             continue
 
         print(
@@ -494,9 +524,9 @@ def recolher_eventos():
 
     return (
         eventos,
-        segunda,
-        domingo,
-        excluidos_semana,
+        inicio_periodo,
+        fim_periodo,
+        excluidos_periodo,
         excluidos_validacao
     )
 
@@ -509,9 +539,9 @@ if __name__ == "__main__":
 
     (
         eventos,
-        segunda,
-        domingo,
-        excluidos_semana,
+        inicio_periodo,
+        fim_periodo,
+        excluidos_periodo,
         excluidos_validacao
     ) = recolher_eventos()
 
@@ -533,7 +563,7 @@ if __name__ == "__main__":
     print("=" * 55)
 
     print(
-        f"Semana analisada: {segunda} a {domingo}"
+        f"Período analisado: {inicio_periodo} a {fim_periodo}"
     )
 
     print(
@@ -541,7 +571,7 @@ if __name__ == "__main__":
     )
 
     print(
-        f"Excluídos por data: {excluidos_semana}"
+        f"Excluídos por data: {excluidos_periodo}"
     )
 
     print(
