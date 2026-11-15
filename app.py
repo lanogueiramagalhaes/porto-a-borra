@@ -1,8 +1,10 @@
 
 import streamlit as st
 import json
+import re
 from pathlib import Path
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 
 # =====================================================
@@ -14,6 +16,8 @@ st.set_page_config(
     page_icon="🎟️",
     layout="wide"
 )
+
+FUSO_HORARIO = ZoneInfo("Europe/Lisbon")
 
 MUNICIPIOS = [
     "Todos os municípios",
@@ -66,15 +70,74 @@ def converter_data(valor):
         return None
 
     try:
-        return datetime.fromisoformat(
+        data = datetime.fromisoformat(
             valor.replace("Z", "+00:00")
-        ).date()
+        )
+
+        if data.tzinfo is not None:
+            data = data.astimezone(FUSO_HORARIO)
+
+        return data.date()
 
     except (ValueError, TypeError):
         try:
             return date.fromisoformat(valor[:10])
         except (ValueError, TypeError):
             return None
+
+
+# =====================================================
+# LIMPAR CONDIÇÕES DE GRATUITIDADE
+# =====================================================
+
+def limpar_condicao_gratuitidade(condicao):
+
+    if not condicao:
+        return ""
+
+    texto = " ".join(condicao.split())
+
+    expressoes = [
+        r"entrada\s+livre",
+        r"entrada\s+gratuita",
+        r"gratuito\s+para",
+        r"gratuita\s+para",
+        r"grátis\s+para",
+        r"gratis\s+para",
+        r"exclusivo\s+para",
+        r"exclusiva\s+para",
+        r"reservado\s+a",
+        r"reservada\s+a",
+        r"apenas\s+para",
+        r"mediante\s+apresentação",
+        r"mediante\s+comprovativo",
+        r"gratuito\s+mediante",
+        r"gratuita\s+mediante",
+        r"residentes\s+em",
+        r"para\s+residentes",
+        r"para\s+estudantes",
+        r"para\s+alunos",
+        r"para\s+professores",
+        r"para\s+associados",
+        r"para\s+sócios",
+        r"crianças\s+até",
+        r"menores\s+de"
+    ]
+
+    padrao = re.compile(
+        "|".join(expressoes),
+        flags=re.IGNORECASE
+    )
+
+    correspondencia = padrao.search(texto)
+
+    if correspondencia:
+        texto = texto[correspondencia.start():]
+
+    # Remove um eventual "A" isolado no final do texto.
+    texto = re.sub(r"\s+A$", "", texto)
+
+    return texto.strip(" ,.;-")
 
 
 # =====================================================
@@ -156,6 +219,14 @@ def apresentar_evento(evento):
     url_evento = evento.get("url_evento", "")
     fonte_oficial = evento.get("fonte_oficial", "")
 
+    gratuito_condicionado = evento.get(
+        "gratuito_condicionado", False
+    )
+
+    condicao_gratuitidade = limpar_condicao_gratuitidade(
+        evento.get("condicoes_gratuitidade", "")
+    )
+
     with st.container(border=True):
 
         st.markdown(f"### {titulo}")
@@ -173,10 +244,27 @@ def apresentar_evento(evento):
             st.write(f"📌 **Local:** {local}")
 
         # Informação sobre a entrada
+        if gratuito_condicionado:
+
+            st.write("🎟️ **Entrada: Gratuita com condições**")
+
+            if condicao_gratuitidade:
+                st.caption(
+                    f"ℹ️ Condição de acesso: {condicao_gratuitidade}"
+                )
+            else:
+                st.caption(
+                    "ℹ️ Consulta a fonte oficial para conhecer "
+                    "as condições de acesso."
+                )
+
+        else:
+
+            st.write("🎟️ **Entrada: Gratuita**")
+
+        # Informação adicional sobre inscrição e reservas
         texto_preco = f"{preco} {detalhe_preco}".strip()
         preco_lower = texto_preco.lower()
-
-        st.write("🎟️ **Entrada:** Gratuita")
 
         if "inscrição" in preco_lower or "inscricao" in preco_lower:
             st.caption("ℹ️ É necessária inscrição prévia.")
@@ -270,7 +358,7 @@ with st.expander("📅 Filtrar por período"):
 
     if ativar_filtro_data:
 
-        hoje = date.today()
+        hoje = datetime.now(FUSO_HORARIO).date()
 
         col_data1, col_data2 = st.columns(2)
 
