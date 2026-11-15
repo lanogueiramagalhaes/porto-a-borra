@@ -33,6 +33,12 @@ CATEGORIAS_VALIDAS = [
     "Feiras e gastronomia", "Outros"
 ]
 
+MESES = [
+    "janeiro", "fevereiro", "março", "abril",
+    "maio", "junho", "julho", "agosto",
+    "setembro", "outubro", "novembro", "dezembro"
+]
+
 
 # =========================================================
 # LIGAÇÃO À FONTE
@@ -129,6 +135,59 @@ def converter_data(data_texto):
 
     except (ValueError, TypeError):
         return None
+
+
+# =========================================================
+# FORMATAÇÃO DAS DATAS DOS EVENTOS
+# =========================================================
+
+def formatar_data_portuguesa(data):
+    if not data:
+        return ""
+
+    mes = MESES[data.month - 1]
+
+    return f"{data.day} de {mes} de {data.year}"
+
+
+def formatar_periodo_evento(data_inicio, data_fim):
+
+    inicio = converter_data(data_inicio)
+    fim = converter_data(data_fim)
+
+    if not inicio or not fim:
+        return ""
+
+    # Evento de um único dia.
+    if inicio == fim:
+        return formatar_data_portuguesa(inicio)
+
+    # Evento dentro do mesmo mês e ano.
+    if inicio.month == fim.month and inicio.year == fim.year:
+
+        mes = MESES[fim.month - 1]
+
+        return (
+            f"{inicio.day} a {fim.day} de {mes} "
+            f"de {fim.year}"
+        )
+
+    # Evento em meses diferentes, mas no mesmo ano.
+    if inicio.year == fim.year:
+
+        mes_inicio = MESES[inicio.month - 1]
+        mes_fim = MESES[fim.month - 1]
+
+        return (
+            f"{inicio.day} de {mes_inicio} a "
+            f"{fim.day} de {mes_fim} de {fim.year}"
+        )
+
+    # Evento que atravessa dois anos.
+    return (
+        f"{formatar_data_portuguesa(inicio)} a "
+        f"{formatar_data_portuguesa(fim)}"
+    )
 
 
 def evento_no_periodo(
@@ -393,7 +452,16 @@ def extrair_evento(
     campo_preco = obter_campo(sopa, "Preço")
     campo_publico = obter_campo(sopa, "Para quem")
 
-    quando = obter_texto(campo_quando)
+    # Usar as datas estruturadas do cartão.
+    # Só recorrer ao texto da página se não forem válidas.
+    quando = formatar_periodo_evento(
+        data_inicio,
+        data_fim
+    )
+
+    if not quando:
+        quando = obter_texto(campo_quando)
+
     horario = extrair_horarios(campo_quando)
 
     local, municipio = extrair_local_e_municipio(
@@ -592,6 +660,10 @@ def recolher_eventos():
                     )
                 else:
                     print("     Gratuito sem condição identificada.")
+
+                print(
+                    f"     Data: {evento['quando']}"
+                )
 
                 print(
                     f"     Horário: {evento['horario'] or 'Não indicado'}"
