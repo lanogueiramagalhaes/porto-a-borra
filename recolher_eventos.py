@@ -228,7 +228,7 @@ def extrair_local_e_municipio(campo_onde, municipio_cartao):
 def validar_gratuitidade(campo_preco):
 
     if campo_preco is None:
-        return False, "Preço não identificado"
+        return False, "Preço não identificado", ""
 
     texto = obter_texto(campo_preco).lower()
 
@@ -241,28 +241,8 @@ def validar_gratuitidade(campo_preco):
         "entrada gratuita"
     ]
 
-    termos_condicionais = [
-        "associados",
-        "sócios",
-        "socios",
-        "mediante apresentação",
-        "mediante comprovativo",
-        "exclusivo para",
-        "exclusiva para",
-        "apenas para",
-        "reservado a",
-        "reservada a",
-        "cartão de estudante",
-        "cartao de estudante",
-        "gratuito para estudantes",
-        "gratuita para estudantes",
-        "gratuito para professores",
-        "gratuita para professores",
-        "apenas na inauguração",
-        "na inauguração",
-        "inauguração gratuita"
-    ]
-
+    # Expressões que indicam que o preço não está confirmado
+    # ou que o evento exige pagamento.
     termos_nao_gratuitos = [
         "preço a confirmar",
         "preco a confirmar",
@@ -270,33 +250,94 @@ def validar_gratuitidade(campo_preco):
         "bilhete pago",
         "bilhetes pagos",
         "entrada paga",
-        "pago"
+        "com bilhete",
+        "bilheteira"
     ]
 
-    # Rejeitar preços pagos ou ainda por confirmar
-    if any(
-        termo in texto
-        for termo in termos_nao_gratuitos
-    ):
-        return False, "Preço pago ou por confirmar"
+    for termo in termos_nao_gratuitos:
+        if termo in texto:
+            return False, "Preço pago ou por confirmar", ""
 
-    # Rejeitar gratuitidade sujeita a condições
-    if any(
-        termo in texto
-        for termo in termos_condicionais
-    ):
-        return False, "Gratuitidade sujeita a condições especiais"
+    # A gratuitidade apenas na inauguração não significa
+    # que o evento seja gratuito durante todo o período.
+    termos_gratuitos_apenas_inauguracao = [
+        "apenas na inauguração",
+        "só na inauguração",
+        "so na inauguracao",
+        "na inauguração",
+        "na inauguracao",
+        "inauguração gratuita",
+        "inauguracao gratuita"
+    ]
 
-    # Exigir indicação explícita de gratuitidade
+    for termo in termos_gratuitos_apenas_inauguracao:
+        if termo in texto:
+            return (
+                False,
+                "Gratuitidade limitada à inauguração",
+                ""
+            )
+
+    # Exigir sempre uma indicação explícita de gratuitidade.
     gratuito = any(
         indicacao in texto
         for indicacao in indicacoes_gratuitas
     )
 
     if not gratuito:
-        return False, "Gratuitidade não confirmada no texto do preço"
+        return (
+            False,
+            "Gratuitidade não confirmada no texto do preço",
+            ""
+        )
 
-    return True, ""
+    # Identificar situações em que a entrada gratuita
+    # depende de uma condição específica.
+    padroes_condicionais = [
+        r"residentes",
+        r"para estudantes",
+        r"para alunos",
+        r"para professores",
+        r"para associados",
+        r"para sócios",
+        r"para socios",
+        r"mediante apresentação",
+        r"mediante apresentacao",
+        r"mediante comprovativo",
+        r"exclusivo para",
+        r"exclusiva para",
+        r"apenas para",
+        r"reservado a",
+        r"reservada a",
+        r"cartão de estudante",
+        r"cartao de estudante",
+        r"gratuito para",
+        r"gratuita para",
+        r"entrada livre para",
+        r"entrada gratuita para",
+        r"crianças até",
+        r"criancas ate",
+        r"menores de",
+        r"até aos \d+ anos",
+        r"ate aos \d+ anos"
+    ]
+
+    tem_condicao = any(
+        re.search(padrao, texto)
+        for padrao in padroes_condicionais
+    )
+
+    if tem_condicao:
+        # Guardar o texto explicativo da condição.
+        # Se existir um detalhe separado, é preferível usá-lo.
+        detalhe = obter_texto(campo_preco.find("span"))
+
+        condicao = detalhe if detalhe else obter_texto(campo_preco)
+
+        return True, "", condicao
+
+    # Gratuito sem condição específica identificada.
+    return True, "", ""
 
 
 # =========================================================
@@ -367,32 +408,6 @@ def extrair_evento(
 
     publico = obter_texto(campo_publico)
 
-    # -----------------------------------------------------
-    # DIAGNÓSTICO DETALHADO DO PREÇO
-    # -----------------------------------------------------
-
-    print("     --- DIAGNÓSTICO DO PREÇO ---")
-
-    print(
-        f"     TEXTO DO PREÇO: {preco!r}"
-    )
-
-    print(
-        f"     CLASSES DO PREÇO: "
-        f"{campo_preco.get('class', []) if campo_preco else 'Campo inexistente'}"
-    )
-
-    print(
-        f"     DETALHE DO PREÇO: {detalhe_preco!r}"
-    )
-
-    print(
-        f"     HTML ORIGINAL DO PREÇO: "
-        f"{str(campo_preco)[:1500] if campo_preco else 'Campo inexistente'}"
-    )
-
-    print("     ---------------------------")
-
     fonte_oficial = obter_fonte_oficial(
         sopa,
         url_evento
@@ -404,8 +419,10 @@ def extrair_evento(
     if municipio not in MUNICIPIOS:
         return None, "Município fora dos 18 municípios abrangidos"
 
-    # Validar gratuitidade
-    gratuito, motivo_preco = validar_gratuitidade(campo_preco)
+    # Validar gratuitidade e identificar eventuais condições
+    gratuito, motivo_preco, condicao_gratuitidade = (
+        validar_gratuitidade(campo_preco)
+    )
 
     if not gratuito:
         return None, motivo_preco
@@ -436,6 +453,8 @@ def extrair_evento(
         "local": local,
         "preco": preco,
         "detalhe_preco": detalhe_preco,
+        "gratuito_condicionado": bool(condicao_gratuitidade),
+        "condicoes_gratuitidade": condicao_gratuitidade,
         "publico": publico,
         "url_evento": url_evento,
         "fonte_oficial": fonte_oficial
@@ -558,9 +577,19 @@ def recolher_eventos():
                 eventos.append(evento)
 
                 print("  -> Evento aceite.")
+
+                if evento["gratuito_condicionado"]:
+                    print(
+                        "     Gratuito com condição: "
+                        f"{evento['condicoes_gratuitidade']}"
+                    )
+                else:
+                    print("     Gratuito sem condição identificada.")
+
                 print(
                     f"     Horário: {evento['horario'] or 'Não indicado'}"
                 )
+
                 print(
                     f"     Local: {evento['local']}"
                 )
@@ -640,6 +669,15 @@ if __name__ == "__main__":
     print(f"Cartões sem ligação para evento: {excluidos_sem_link}")
     print(f"Eventos duplicados: {duplicados}")
     print(f"Erros de acesso ou leitura: {erros_acesso}")
+
+    condicionados = sum(
+        1 for evento in eventos
+        if evento["gratuito_condicionado"]
+    )
+
+    print(
+        f"Eventos gratuitos com condições: {condicionados}"
+    )
 
     print("\nMOTIVOS DE EXCLUSÃO NA VALIDAÇÃO:")
 
