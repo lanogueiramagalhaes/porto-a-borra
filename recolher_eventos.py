@@ -27,20 +27,10 @@ MUNICIPIOS = [
 ]
 
 CATEGORIAS_VALIDAS = [
-    "Música",
-    "Exposições",
-    "Teatro",
-    "Cinema",
-    "Workshops",
-    "Desporto",
-    "Feiras e mercados",
-    "Ar livre",
-    "Conferências",
-    "Livros e ideias",
-    "Natureza e ar livre",
-    "Teatro e dança",
-    "Feiras e gastronomia",
-    "Outros"
+    "Música", "Exposições", "Teatro", "Cinema", "Workshops",
+    "Desporto", "Feiras e mercados", "Ar livre", "Conferências",
+    "Livros e ideias", "Natureza e ar livre", "Teatro e dança",
+    "Feiras e gastronomia", "Outros"
 ]
 
 TERMOS_CONDICIONAIS = [
@@ -135,11 +125,7 @@ def adicionar_meses(data_original, meses):
 
 def obter_periodo_recolha():
     hoje = datetime.now(FUSO_HORARIO).date()
-
-    fim_periodo = adicionar_meses(
-        hoje,
-        2
-    )
+    fim_periodo = adicionar_meses(hoje, 2)
 
     return hoje, fim_periodo
 
@@ -176,8 +162,6 @@ def evento_no_periodo(
     if not inicio or not fim:
         return False
 
-    # O evento é aceite se tiver alguma parte
-    # dentro do período de recolha.
     return (
         inicio <= fim_periodo
         and fim >= inicio_periodo
@@ -207,8 +191,6 @@ def obter_datas_do_cartao(cartao):
 def extrair_horarios(campo_quando):
     texto = obter_texto(campo_quando)
 
-    # Reconhece formatos como:
-    # 10h, 14h30, 15h00, 19:00 e 21H30.
     horarios = re.findall(
         r"(?<!\d)\d{1,2}(?::\d{2}|h\d{0,2})(?!\d)",
         texto,
@@ -242,7 +224,6 @@ def extrair_local_e_municipio(campo_onde, municipio_cartao):
     if elemento_municipio:
         municipio = obter_texto(elemento_municipio)
 
-    # Remove o município quando aparece repetido no final do local.
     if municipio:
         local = re.sub(
             r"\s+" + re.escape(municipio) + r"$",
@@ -251,7 +232,6 @@ def extrair_local_e_municipio(campo_onde, municipio_cartao):
             flags=re.IGNORECASE
         ).strip()
 
-    # Recupera nomes cortados que terminam numa preposição.
     if local.lower().endswith(
         (" da", " de", " do", " das", " dos", " à", " ao")
     ):
@@ -264,21 +244,23 @@ def extrair_local_e_municipio(campo_onde, municipio_cartao):
 # VALIDAÇÃO DA GRATUITIDADE
 # =========================================================
 
-def gratuitidade_confirmada(campo_preco, detalhe_preco):
+def validar_gratuitidade(campo_preco):
+
     if campo_preco is None:
-        return False
+        return False, "Preço não identificado"
 
     classes = campo_preco.get("class", [])
 
-    if "gratis" not in classes:
-        return False
-
-    # Analisa o texto completo do preço.
     texto = obter_texto(campo_preco).lower()
 
+    # Verifica se a fonte identifica o evento como gratuito.
+    if "gratis" not in classes:
+        return False, "Preço não identificado como gratuito"
+
+    # Verifica condições especiais de acesso.
     for termo in TERMOS_CONDICIONAIS:
         if termo in texto:
-            return False
+            return False, "Gratuitidade sujeita a condições especiais"
 
     indicacoes_gratuitas = [
         "gratuito",
@@ -289,10 +271,13 @@ def gratuitidade_confirmada(campo_preco, detalhe_preco):
         "entrada gratuita"
     ]
 
-    return any(
+    if not any(
         indicacao in texto
         for indicacao in indicacoes_gratuitas
-    )
+    ):
+        return False, "Gratuitidade não confirmada no texto do preço"
+
+    return True, ""
 
 
 # =========================================================
@@ -324,7 +309,7 @@ def obter_fonte_oficial(sopa, url_evento):
 
 
 # =========================================================
-# EXTRAÇÃO DE CADA EVENTO
+# EXTRAÇÃO E VALIDAÇÃO DE CADA EVENTO
 # =========================================================
 
 def extrair_evento(
@@ -334,6 +319,7 @@ def extrair_evento(
     data_inicio,
     data_fim
 ):
+
     sopa = obter_pagina(url_evento, URL_AGENDA)
 
     titulo = obter_texto(sopa.find("h1"))
@@ -369,23 +355,32 @@ def extrair_evento(
 
     categoria = normalizar_categoria(categoria_cartao)
 
-    # Validações obrigatórias.
+    # Validação do município
     if municipio not in MUNICIPIOS:
-        return None
+        return None, "Município fora dos 18 municípios abrangidos"
 
-    if not gratuitidade_confirmada(campo_preco, detalhe_preco):
-        return None
+    # Validação da gratuitidade
+    gratuito, motivo_preco = validar_gratuitidade(campo_preco)
 
-    if not titulo or not local:
-        return None
+    if not gratuito:
+        return None, motivo_preco
+
+    # Validação do título
+    if not titulo:
+        return None, "Título do evento em falta"
+
+    # Validação do local
+    if not local:
+        return None, "Local do evento em falta"
 
     if "a confirmar" in local.lower():
-        return None
+        return None, "Local ainda por confirmar"
 
+    # Validação da fonte oficial
     if not fonte_oficial:
-        return None
+        return None, "Ligação à fonte oficial não identificada"
 
-    return {
+    evento = {
         "titulo": titulo,
         "municipio": municipio,
         "categoria": categoria,
@@ -401,12 +396,15 @@ def extrair_evento(
         "fonte_oficial": fonte_oficial
     }
 
+    return evento, ""
+
 
 # =========================================================
 # RECOLHA DE TODOS OS EVENTOS
 # =========================================================
 
 def recolher_eventos():
+
     inicio_periodo, fim_periodo = obter_periodo_recolha()
 
     print("=" * 55)
@@ -432,8 +430,13 @@ def recolher_eventos():
     eventos = []
     urls_processados = set()
 
+    motivos_exclusao = {}
+
     excluidos_periodo = 0
-    excluidos_validacao = 0
+    excluidos_municipio = 0
+    excluidos_sem_link = 0
+    duplicados = 0
+    erros_acesso = 0
 
     for cartao in cartoes:
 
@@ -444,6 +447,7 @@ def recolher_eventos():
         municipio = obter_texto(municipio_elemento)
 
         if municipio not in MUNICIPIOS:
+            excluidos_municipio += 1
             continue
 
         categoria_elemento = cartao.find(
@@ -458,6 +462,7 @@ def recolher_eventos():
         )
 
         if not link_evento:
+            excluidos_sem_link += 1
             continue
 
         url_evento = urljoin(
@@ -466,9 +471,12 @@ def recolher_eventos():
         )
 
         if url_evento in urls_processados:
+            duplicados += 1
             continue
 
         urls_processados.add(url_evento)
+
+        titulo_cartao = obter_texto(link_evento)
 
         data_inicio, data_fim = obter_datas_do_cartao(
             cartao
@@ -481,14 +489,17 @@ def recolher_eventos():
             fim_periodo
         ):
             excluidos_periodo += 1
+            print(
+                f"\nExcluído por data: {titulo_cartao or url_evento}"
+            )
             continue
 
         print(
-            f"\nA analisar: {obter_texto(link_evento)}"
+            f"\nA analisar: {titulo_cartao or url_evento}"
         )
 
         try:
-            evento = extrair_evento(
+            evento, motivo = extrair_evento(
                 url_evento,
                 municipio,
                 categoria,
@@ -498,27 +509,29 @@ def recolher_eventos():
 
             if evento:
                 eventos.append(evento)
-                print("  -> Evento aceite.")
 
+                print("  -> Evento aceite.")
                 print(
                     f"     Horário: {evento['horario'] or 'Não indicado'}"
                 )
-
                 print(
                     f"     Local: {evento['local']}"
                 )
 
             else:
-                excluidos_validacao += 1
-                print("  -> Evento excluído na validação.")
+                motivos_exclusao[motivo] = (
+                    motivos_exclusao.get(motivo, 0) + 1
+                )
+
+                print(f"  -> Evento excluído: {motivo}")
 
         except requests.RequestException as erro:
-            excluidos_validacao += 1
+            erros_acesso += 1
             print(f"  -> Erro de acesso: {erro}")
 
         except Exception as erro:
-            excluidos_validacao += 1
-            print(f"  -> Erro na leitura: {erro}")
+            erros_acesso += 1
+            print(f"  -> Erro inesperado: {erro}")
 
         time.sleep(0.5)
 
@@ -527,7 +540,11 @@ def recolher_eventos():
         inicio_periodo,
         fim_periodo,
         excluidos_periodo,
-        excluidos_validacao
+        excluidos_municipio,
+        excluidos_sem_link,
+        duplicados,
+        erros_acesso,
+        motivos_exclusao
     )
 
 
@@ -542,7 +559,11 @@ if __name__ == "__main__":
         inicio_periodo,
         fim_periodo,
         excluidos_periodo,
-        excluidos_validacao
+        excluidos_municipio,
+        excluidos_sem_link,
+        duplicados,
+        erros_acesso,
+        motivos_exclusao
     ) = recolher_eventos()
 
     with open(
@@ -566,16 +587,23 @@ if __name__ == "__main__":
         f"Período analisado: {inicio_periodo} a {fim_periodo}"
     )
 
-    print(
-        f"Eventos aceites: {len(eventos)}"
-    )
+    print(f"Eventos aceites: {len(eventos)}")
+    print(f"Excluídos por data: {excluidos_periodo}")
+    print(f"Excluídos por município: {excluidos_municipio}")
+    print(f"Cartões sem ligação para evento: {excluidos_sem_link}")
+    print(f"Eventos duplicados: {duplicados}")
+    print(f"Erros de acesso ou leitura: {erros_acesso}")
 
-    print(
-        f"Excluídos por data: {excluidos_periodo}"
-    )
+    print("\nMOTIVOS DE EXCLUSÃO NA VALIDAÇÃO:")
 
-    print(
-        f"Excluídos na validação: {excluidos_validacao}"
-    )
+    if motivos_exclusao:
+        for motivo, quantidade in sorted(
+            motivos_exclusao.items(),
+            key=lambda item: item[1],
+            reverse=True
+        ):
+            print(f"- {motivo}: {quantidade}")
+    else:
+        print("- Não foram registadas exclusões na validação.")
 
-    print("Ficheiro criado: eventos.json")
+    print("\nFicheiro criado: eventos.json")
