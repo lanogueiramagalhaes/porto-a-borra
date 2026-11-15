@@ -203,7 +203,12 @@ def extrair_local_e_municipio(campo_onde, municipio_cartao):
         local = obter_texto(campo_onde)
 
     if elemento_municipio:
-        municipio = obter_texto(elemento_municipio)
+        municipio_pagina = obter_texto(elemento_municipio)
+
+        # Dar prioridade ao município da página do evento,
+        # mas apenas se pertencer aos 18 municípios abrangidos.
+        if municipio_pagina in MUNICIPIOS:
+            municipio = municipio_pagina
 
     if municipio:
         local = re.sub(
@@ -241,8 +246,6 @@ def validar_gratuitidade(campo_preco):
         "entrada gratuita"
     ]
 
-    # Expressões que indicam que o preço não está confirmado
-    # ou que o evento exige pagamento.
     termos_nao_gratuitos = [
         "preço a confirmar",
         "preco a confirmar",
@@ -254,12 +257,13 @@ def validar_gratuitidade(campo_preco):
         "bilheteira"
     ]
 
+    # Excluir eventos pagos ou com preço por confirmar.
     for termo in termos_nao_gratuitos:
         if termo in texto:
             return False, "Preço pago ou por confirmar", ""
 
-    # A gratuitidade apenas na inauguração não significa
-    # que o evento seja gratuito durante todo o período.
+    # Excluir eventos cuja gratuitidade se aplica
+    # apenas à inauguração.
     termos_gratuitos_apenas_inauguracao = [
         "apenas na inauguração",
         "só na inauguração",
@@ -278,7 +282,7 @@ def validar_gratuitidade(campo_preco):
                 ""
             )
 
-    # Exigir sempre uma indicação explícita de gratuitidade.
+    # Exigir indicação explícita de gratuitidade.
     gratuito = any(
         indicacao in texto
         for indicacao in indicacoes_gratuitas
@@ -291,8 +295,7 @@ def validar_gratuitidade(campo_preco):
             ""
         )
 
-    # Identificar situações em que a entrada gratuita
-    # depende de uma condição específica.
+    # Identificar condições específicas de acesso gratuito.
     padroes_condicionais = [
         r"residentes",
         r"para estudantes",
@@ -328,15 +331,16 @@ def validar_gratuitidade(campo_preco):
     )
 
     if tem_condicao:
-        # Guardar o texto explicativo da condição.
-        # Se existir um detalhe separado, é preferível usá-lo.
         detalhe = obter_texto(campo_preco.find("span"))
 
-        condicao = detalhe if detalhe else obter_texto(campo_preco)
+        condicao = (
+            detalhe
+            if detalhe
+            else obter_texto(campo_preco)
+        )
 
         return True, "", condicao
 
-    # Gratuito sem condição específica identificada.
     return True, "", ""
 
 
@@ -415,11 +419,11 @@ def extrair_evento(
 
     categoria = normalizar_categoria(categoria_cartao)
 
-    # Validar município
+    # Validar município.
     if municipio not in MUNICIPIOS:
         return None, "Município fora dos 18 municípios abrangidos"
 
-    # Validar gratuitidade e identificar eventuais condições
+    # Validar gratuitidade e identificar condições.
     gratuito, motivo_preco, condicao_gratuitidade = (
         validar_gratuitidade(campo_preco)
     )
@@ -427,18 +431,18 @@ def extrair_evento(
     if not gratuito:
         return None, motivo_preco
 
-    # Validar título
+    # Validar título.
     if not titulo:
         return None, "Título do evento em falta"
 
-    # Validar local
+    # Validar local.
     if not local:
         return None, "Local do evento em falta"
 
     if "a confirmar" in local.lower():
         return None, "Local ainda por confirmar"
 
-    # Validar fonte oficial
+    # Validar fonte oficial.
     if not fonte_oficial:
         return None, "Ligação à fonte oficial não identificada"
 
@@ -510,9 +514,12 @@ def recolher_eventos():
 
         municipio = obter_texto(municipio_elemento)
 
-        if municipio not in MUNICIPIOS:
-            excluidos_municipio += 1
-            continue
+        # O município do cartão é uma primeira indicação.
+        # A validação final é feita com os dados da página.
+        if municipio and municipio not in MUNICIPIOS:
+            # Não excluir imediatamente: a página individual
+            # pode conter um município válido mais preciso.
+            pass
 
         categoria_elemento = cartao.find(
             class_="categoria"
@@ -594,6 +601,10 @@ def recolher_eventos():
                     f"     Local: {evento['local']}"
                 )
 
+                print(
+                    f"     Município: {evento['municipio']}"
+                )
+
             else:
                 motivos_exclusao[motivo] = (
                     motivos_exclusao.get(motivo, 0) + 1
@@ -665,7 +676,6 @@ if __name__ == "__main__":
 
     print(f"Eventos aceites: {len(eventos)}")
     print(f"Excluídos por data: {excluidos_periodo}")
-    print(f"Excluídos por município: {excluidos_municipio}")
     print(f"Cartões sem ligação para evento: {excluidos_sem_link}")
     print(f"Eventos duplicados: {duplicados}")
     print(f"Erros de acesso ou leitura: {erros_acesso}")
