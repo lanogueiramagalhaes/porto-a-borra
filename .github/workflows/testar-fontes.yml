@@ -48,5 +48,8 @@ jobs:
             echo "Não existem alterações aos eventos."
           else
             git commit -m "Atualizar eventos recolhidos"
+
+            git pull --rebase origin main
+
             git push
           fi
