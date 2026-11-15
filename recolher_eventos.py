@@ -7,7 +7,7 @@ import requests
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-from datetime import datetime, date
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 
@@ -31,25 +31,6 @@ CATEGORIAS_VALIDAS = [
     "Desporto", "Feiras e mercados", "Ar livre", "Conferências",
     "Livros e ideias", "Natureza e ar livre", "Teatro e dança",
     "Feiras e gastronomia", "Outros"
-]
-
-TERMOS_CONDICIONAIS = [
-    "associados",
-    "sócios",
-    "socios",
-    "mediante apresentação",
-    "mediante comprovativo",
-    "exclusivo para",
-    "exclusiva para",
-    "apenas para",
-    "reservado a",
-    "reservada a",
-    "cartão de estudante",
-    "cartao de estudante",
-    "gratuito para estudantes",
-    "gratuita para estudantes",
-    "gratuito para professores",
-    "gratuita para professores"
 ]
 
 
@@ -86,19 +67,19 @@ def obter_pagina(url, referer=None):
     return BeautifulSoup(resposta.text, "html.parser")
 
 
+def obter_texto(elemento):
+    if elemento:
+        return elemento.get_text(" ", strip=True)
+
+    return ""
+
+
 def obter_campo(sopa, nome):
     for dt in sopa.find_all("dt"):
         if obter_texto(dt) == nome:
             return dt.find_next_sibling("dd")
 
     return None
-
-
-def obter_texto(elemento):
-    if elemento:
-        return elemento.get_text(" ", strip=True)
-
-    return ""
 
 
 # =========================================================
@@ -249,18 +230,7 @@ def validar_gratuitidade(campo_preco):
     if campo_preco is None:
         return False, "Preço não identificado"
 
-    classes = campo_preco.get("class", [])
-
     texto = obter_texto(campo_preco).lower()
-
-    # Verifica se a fonte identifica o evento como gratuito.
-    if "gratis" not in classes:
-        return False, "Preço não identificado como gratuito"
-
-    # Verifica condições especiais de acesso.
-    for termo in TERMOS_CONDICIONAIS:
-        if termo in texto:
-            return False, "Gratuitidade sujeita a condições especiais"
 
     indicacoes_gratuitas = [
         "gratuito",
@@ -271,10 +241,59 @@ def validar_gratuitidade(campo_preco):
         "entrada gratuita"
     ]
 
-    if not any(
+    termos_condicionais = [
+        "associados",
+        "sócios",
+        "socios",
+        "mediante apresentação",
+        "mediante comprovativo",
+        "exclusivo para",
+        "exclusiva para",
+        "apenas para",
+        "reservado a",
+        "reservada a",
+        "cartão de estudante",
+        "cartao de estudante",
+        "gratuito para estudantes",
+        "gratuita para estudantes",
+        "gratuito para professores",
+        "gratuita para professores",
+        "apenas na inauguração",
+        "na inauguração",
+        "inauguração gratuita"
+    ]
+
+    termos_nao_gratuitos = [
+        "preço a confirmar",
+        "preco a confirmar",
+        "sob consulta",
+        "bilhete pago",
+        "bilhetes pagos",
+        "entrada paga",
+        "pago"
+    ]
+
+    # Rejeitar preços pagos ou ainda por confirmar
+    if any(
+        termo in texto
+        for termo in termos_nao_gratuitos
+    ):
+        return False, "Preço pago ou por confirmar"
+
+    # Rejeitar gratuitidade sujeita a condições
+    if any(
+        termo in texto
+        for termo in termos_condicionais
+    ):
+        return False, "Gratuitidade sujeita a condições especiais"
+
+    # Exigir indicação explícita de gratuitidade
+    gratuito = any(
         indicacao in texto
         for indicacao in indicacoes_gratuitas
-    ):
+    )
+
+    if not gratuito:
         return False, "Gratuitidade não confirmada no texto do preço"
 
     return True, ""
@@ -355,28 +374,28 @@ def extrair_evento(
 
     categoria = normalizar_categoria(categoria_cartao)
 
-    # Validação do município
+    # Validar município
     if municipio not in MUNICIPIOS:
         return None, "Município fora dos 18 municípios abrangidos"
 
-    # Validação da gratuitidade
+    # Validar gratuitidade
     gratuito, motivo_preco = validar_gratuitidade(campo_preco)
 
     if not gratuito:
         return None, motivo_preco
 
-    # Validação do título
+    # Validar título
     if not titulo:
         return None, "Título do evento em falta"
 
-    # Validação do local
+    # Validar local
     if not local:
         return None, "Local do evento em falta"
 
     if "a confirmar" in local.lower():
         return None, "Local ainda por confirmar"
 
-    # Validação da fonte oficial
+    # Validar fonte oficial
     if not fonte_oficial:
         return None, "Ligação à fonte oficial não identificada"
 
@@ -489,9 +508,11 @@ def recolher_eventos():
             fim_periodo
         ):
             excluidos_periodo += 1
+
             print(
                 f"\nExcluído por data: {titulo_cartao or url_evento}"
             )
+
             continue
 
         print(
