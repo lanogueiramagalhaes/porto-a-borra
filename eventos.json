@@ -10,6 +10,8 @@
         "local": "Auditório Municipal de Gondomar",
         "preco": "Grátis Entrada gratuita, sujeita à lotação da sala",
         "detalhe_preco": "Entrada gratuita, sujeita à lotação da sala",
+        "gratuito_condicionado": false,
+        "condicoes_gratuitidade": "",
         "publico": "Para todos",
         "url_evento": "https://culturaja.pt/evento/encontros-com-a-musica-2026-4783a3",
         "fonte_oficial": "https://iporto.amp.pt/eventos/encontros-com-a-musica-2026/"
@@ -25,6 +27,8 @@
         "local": "Igreja de Santo Ildefonso",
         "preco": "Grátis Entrada gratuita",
         "detalhe_preco": "Entrada gratuita",
+        "gratuito_condicionado": false,
+        "condicoes_gratuitidade": "",
         "publico": "Para todos",
         "url_evento": "https://culturaja.pt/evento/bach-plus-portugal-e489dc",
         "fonte_oficial": "https://iporto.amp.pt/eventos/bach-plus-portugal/"
@@ -40,6 +44,8 @@
         "local": "Plataforma NAU",
         "preco": "Grátis antes, durante e depois”, uma formação gratuita e aberta à participação de to",
         "detalhe_preco": "antes, durante e depois”, uma formação gratuita e aberta à participação de to",
+        "gratuito_condicionado": false,
+        "condicoes_gratuitidade": "",
         "publico": "Famílias",
         "url_evento": "https://culturaja.pt/evento/incendios-rurais-o-que-fazer-antes-durante-e-depois-e4bffc",
         "fonte_oficial": "https://www.cm-gaia.pt/pt/eventos/incendios-rurais-o-que-fazer-antes-durante-e-depois/"
@@ -55,6 +61,8 @@
         "local": "CMIA de Matosinhos",
         "preco": "Grátis Entrada livre",
         "detalhe_preco": "Entrada livre",
+        "gratuito_condicionado": false,
+        "condicoes_gratuitidade": "",
         "publico": "Para todos",
         "url_evento": "https://culturaja.pt/evento/anfibios-uma-pata-na-agua-outra-na-terra-35c3e2",
         "fonte_oficial": "https://www.cm-matosinhos.pt/evento/anfibios-uma-pata-na-agua-outra-na-terra"
@@ -70,6 +78,8 @@
         "local": "Casa-Museu Teixeira Lopes/Galerias Diogo de Macedo",
         "preco": "Grátis Visitas acompanhadas e gratuitas à Casa-Museu Teixeira Lopes,",
         "detalhe_preco": "Visitas acompanhadas e gratuitas à Casa-Museu Teixeira Lopes,",
+        "gratuito_condicionado": false,
+        "condicoes_gratuitidade": "",
         "publico": "Para todos",
         "url_evento": "https://culturaja.pt/evento/metamorfoses-2f3fab",
         "fonte_oficial": "https://www.cm-gaia.pt/pt/eventos/metamorfoses/"
@@ -85,6 +95,8 @@
         "local": "Mosteiro de São Bento da Vitória",
         "preco": "Grátis Entrada livre",
         "detalhe_preco": "Entrada livre",
+        "gratuito_condicionado": false,
+        "condicoes_gratuitidade": "",
         "publico": "Para todos",
         "url_evento": "https://culturaja.pt/evento/leituras-no-mosteiro-b1229e",
         "fonte_oficial": "http://culturaportugal.gov.pt/pt/conhecer/eventos/gepac-2026/leituras-no-mosteiro-1/"
@@ -100,6 +112,8 @@
         "local": "Museu do Porto",
         "preco": "Grátis Entrada livre",
         "detalhe_preco": "Entrada livre",
+        "gratuito_condicionado": false,
+        "condicoes_gratuitidade": "",
         "publico": "Famílias",
         "url_evento": "https://culturaja.pt/evento/colecao-atelie-antonio-carneiro-3ac030",
         "fonte_oficial": "http://culturaportugal.gov.pt/pt/conhecer/eventos/gepac-2026/colecao-atelie-antonio-carneiro/"
