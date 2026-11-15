@@ -367,6 +367,32 @@ def extrair_evento(
 
     publico = obter_texto(campo_publico)
 
+    # -----------------------------------------------------
+    # DIAGNÓSTICO DETALHADO DO PREÇO
+    # -----------------------------------------------------
+
+    print("     --- DIAGNÓSTICO DO PREÇO ---")
+
+    print(
+        f"     TEXTO DO PREÇO: {preco!r}"
+    )
+
+    print(
+        f"     CLASSES DO PREÇO: "
+        f"{campo_preco.get('class', []) if campo_preco else 'Campo inexistente'}"
+    )
+
+    print(
+        f"     DETALHE DO PREÇO: {detalhe_preco!r}"
+    )
+
+    print(
+        f"     HTML ORIGINAL DO PREÇO: "
+        f"{str(campo_preco)[:1500] if campo_preco else 'Campo inexistente'}"
+    )
+
+    print("     ---------------------------")
+
     fonte_oficial = obter_fonte_oficial(
         sopa,
         url_evento
