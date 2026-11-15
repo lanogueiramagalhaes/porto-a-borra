@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 # CONFIGURAÇÕES
 # =========================================================
 
-URL_AGENDA = "https://culturaja.pt/o-que-fazer/gratis"
+URL_AGENDA = "https://culturaja.pt/agenda/?preco=gratuito"
 FUSO_HORARIO = ZoneInfo("Europe/Lisbon")
 
 MUNICIPIOS = [
