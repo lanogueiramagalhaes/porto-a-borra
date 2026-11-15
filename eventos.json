@@ -85,6 +85,23 @@
         "fonte_oficial": "https://www.cm-gaia.pt/pt/eventos/metamorfoses/"
     },
     {
+        "titulo": "Coleção IFC: Matéria de Sonhos",
+        "municipio": "Porto",
+        "categoria": "Exposições",
+        "quando": "Quinta-feira, 30 de julho a domingo, 31 de janeiro Até 31 jan 2027",
+        "horario": "",
+        "data_inicio": "2026-07-30T00:00:00+01:00",
+        "data_fim": "2027-01-31T23:59:59.000Z",
+        "local": "Museu Nacional Soares dos Reis",
+        "preco": "Grátis Sonhos” De 30 de julho a 31 de janeiro Entrada livre para residentes em Portugal A",
+        "detalhe_preco": "Sonhos” De 30 de julho a 31 de janeiro Entrada livre para residentes em Portugal A",
+        "gratuito_condicionado": true,
+        "condicoes_gratuitidade": "Sonhos” De 30 de julho a 31 de janeiro Entrada livre para residentes em Portugal A",
+        "publico": "Para todos",
+        "url_evento": "https://culturaja.pt/evento/colecao-ifc-materia-de-sonhos-7588ed",
+        "fonte_oficial": "https://museusoaresdosreis.gov.pt/agenda/colecao-ifc-materia-de-sonhos/"
+    },
+    {
         "titulo": "Leituras no Mosteiro",
         "municipio": "Porto",
         "categoria": "Teatro e dança",
